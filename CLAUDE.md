@@ -27,3 +27,19 @@ CLI is recorded, not pinned: `@fission-ai/openspec@1.11.0`, resolved on `PATH`.
 - **Dependencies are minimal and human-approved.** Argue for a new one, and wait for approval before installing it.
 - **Never weaken the gate to pass.** A deleted test, a blanket suppression, a loosened config: halt and say so.
 - **State lives on disk.** Rebuild where the work is from the active change's `tasks.md` and git.
+
+## Invariants (hold for every change)
+
+- **Generic.** The repo names no person, company or client. Examples use `example`.
+- **No plain secret.** A secret is encrypted with sops + age or absent. No token, key or password in clear.
+- **Pinned.** Every image, collection and plugin is pinned to a tag or a commit. Nothing follows `latest`.
+- **Creates no machines.** agent-iac starts from "a host exists". Flashing a Pi or creating a VPS is outside it.
+- **Extends, never wraps.** The agent runs its official image unmodified and never knows agent-iac exists.
+- **The box never reaches back.** Nothing on a box names the operator's machine, the vault or this repo's path.
+- **No systemd on the host.** The host is Alpine with OpenRC. A mechanism that needs systemd is not used.
+
+## Vocabulary — five words, one meaning each
+
+**box** · one machine made into a home for one agent — **target** · the machine before it is a box, as SSH
+reaches it — **runtime** · one kind of agent, declared by a five-field manifest — **tier** · what the box
+enforces around the agent: `open` or `fenced` — **blueprint** · the agent's own config files, copied in at start.
