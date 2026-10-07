@@ -4,18 +4,18 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
 
 ## Progress
 
-- [ ] 1 — Invariants and vocabulary
+- [x] 1 — Invariants and vocabulary
 - [ ] 2 — The architecture page
 - [ ] 3 — The backlog
 
 ## 1 — Invariants and vocabulary
 
-- [ ] 1.1 Append the `## Invariants (hold for every change)` section from [D10](design.md#d10) to `CLAUDE.md`,
+- [x] 1.1 Append the `## Invariants (hold for every change)` section from [D10](design.md#d10) to `CLAUDE.md`,
       word for word, after the `## Guardrails` section. Verify: `grep -c '^## Invariants' CLAUDE.md` prints `1`
       and `grep -c 'Creates no machines' CLAUDE.md` prints `1`.
-- [ ] 1.2 Append the `## Vocabulary — five words, one meaning each` section from [D10](design.md#d10) after it,
+- [x] 1.2 Append the `## Vocabulary — five words, one meaning each` section from [D10](design.md#d10) after it,
       word for word. Verify: `grep -c '^## Vocabulary' CLAUDE.md` prints `1` and `grep -c '\*\*blueprint\*\*' CLAUDE.md` prints `1`.
-- [ ] 1.3 **HALT CHECK** The template text above the new sections is unchanged.
+- [x] 1.3 **HALT CHECK** The template text above the new sections is unchanged.
       Verify: `git diff main -- CLAUDE.md | grep -c '^-[^-]'` prints `0`.
 
 ## 2 — The architecture page
