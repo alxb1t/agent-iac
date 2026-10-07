@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-07
+
 ### Added
 
 - `CLAUDE.md`: the invariants every change holds and the vocabulary (box, target, runtime, tier, blueprint).
