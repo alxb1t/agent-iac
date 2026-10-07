@@ -1,0 +1,137 @@
+# agent-iac — architecture
+
+What agent-iac is, what a box is, and what an agent and a deployment declare.
+
+## The essence
+
+This section decides what the product is, and what it is not.
+
+agent-iac is a tool on the operator's machine. It turns a machine they already have into a **box** for one agent,
+and keeps it so by re-applying one file. Five sentences define it:
+
+1. A declared machine becomes the box.
+2. The agent runs rootless from a pinned official image, with its state on a volume.
+3. Secrets are encrypted in the repo.
+4. Backups leave the box and provably restore.
+5. Nothing listens publicly.
+
+It is not a sandbox service, a scheduler, a fleet dashboard or a per-agent config language.
+
+## The box
+
+This section decides what one box is made of.
+
+One box = one **target** + one **runtime** + one deployment repo. One agent per box. The target is a plain host the
+operator already owns: a Raspberry Pi first, a VPS or a Proxmox guest later. agent-iac creates no machines.
+
+```
+ operator's Mac                       the box: a Pi today; a VPS or a Proxmox guest later
+ ┌──────────────────────────┐  ssh   ┌───────────────────────────────────────┐
+ │ deployment repo (private)│───────▶│ ALPINE   rootless podman · tailscale   │
+ │  box.yaml · blueprint/   │        │          nftables · restic · OpenRC    │
+ │  secrets.sops.yaml       │        │  ┌─────────────────────────────────┐  │
+ │  requirements.yml ──┐    │        │  │ the agent's official image      │  │
+ └─────────────────────┼────┘        │  │ state volume · blueprint copied │  │
+                       ▼             │  └─────────────────────────────────┘  │
+ agent-iac (public collection)       └───────────────────────────────────────┘
+ client phone ─Telegram─▶ Telegram ◀─poll─ the box · client Mac ─tailnet─▶ gateway port
+```
+
+## The host
+
+This section decides what runs on the machine under the agent.
+
+- **Alpine** is the one host OS.
+- **OpenRC** supervises one service per box.
+- **Rootless Podman**, one unprivileged user per box.
+- The agent's official image runs **unmodified**.
+- The host is reachable **only over Tailscale**. nftables drops everything else inbound.
+
+The container's libc is not a boundary. The host is.
+
+## The runtime manifest
+
+This section decides what an agent declares to the box, and nothing more.
+
+A **runtime** is declared by a five-field manifest: `image · state · env · pre_backup · blueprint_mount`. The
+image tag comes from `box.yaml`'s `version`. agent-iac never parses the agent's own config. The agent never knows
+agent-iac exists.
+
+```yaml
+# runtimes/hermes.yaml
+# The env names are read from the image's docs today and may move: re-check them against the pinned image.
+image: docker.io/nousresearch/hermes-agent     # the official image, unmodified; the tag is box.yaml's version
+state:
+  - /opt/data                                  # everything Hermes keeps; backed up as a whole
+env:                                           # the secret names the runtime reads
+  - TELEGRAM_BOT_TOKEN
+  - OPENROUTER_API_KEY
+pre_backup: hermes backup --quick              # exec'd in the container before restic, so SQLite is not torn
+blueprint_mount: /opt/data                     # where the blueprint's files are copied before start
+```
+
+## box.yaml
+
+This section decides what a deployment declares.
+
+A deployment is one `box.yaml` of five fields: `name · target · runtime · version · backup`. Nothing in it is
+runtime-specific. A model choice, an allowlist of users or a cron line is the agent's setting and lives in the
+**blueprint**. `tier` and `egress` arrive with the fence.
+
+```yaml
+# box.yaml
+name: example
+target: example.tailnet.example       # the host, as SSH reaches it
+runtime: hermes                       # names runtimes/hermes.yaml
+version: v2026.10.1                   # the pinned image tag
+backup: sftp:user@mac:/backups/example   # a restic repository URL; a bucket later
+```
+
+## Secrets and backups
+
+This section decides how a secret reaches the box, and how a backup is proven.
+
+**Secrets: sops + age.**
+- `secrets.sops.yaml` sits in the deployment repo. Keys are readable; values are encrypted to the operator's age
+  public key.
+- At apply, Ansible decrypts on the operator's machine and writes a `0600` env file for the box user.
+- The age private key never leaves the operator's machine. The agent reads only its own env.
+
+**Backups: restic.**
+- restic runs from the host on cron over the manifest's `state` paths, after `pre_backup`.
+- The restic repository is a URL in `box.yaml`.
+- A **restore drill** from the operator's machine is a release gate of every change that touches backup.
+- Prune runs from the operator's machine, never on the box. A bucket credential, when a bucket is used, cannot
+  delete.
+
+The box must not hold the key that destroys its own backups. "Backed up" is proven by a restore, not a log line.
+
+## The tiers
+
+This section decides what the box enforces around the agent. A tier is what the agent cannot undo.
+
+| tier | what the box enforces |
+|---|---|
+| open | the box as described above: rootless Podman, Tailscale-only inbound, encrypted secrets, restic backups |
+| fenced | open, plus a proxy container on an internal Podman network with a CONNECT allowlist by domain, nftables outbound, every deny logged |
+
+A third tier, *sealed*, is a backlog line. Tiers are keyed to the box, not to the agent's settings: an agent's
+approval mode is a convenience, not a control.
+
+## The repos and the knowledge base
+
+This section decides what lives in which repo, and how knowledge reaches the client's devices.
+
+**Library, not template.**
+- A deployment repo holds data only: `box.yaml`, `blueprint/`, `secrets.sops.yaml`, a four-line `Makefile`, and
+  `requirements.yml` pinning the collection to a git tag.
+- One private repo per client.
+- The collection ships `blueprints/base/`. The role copies the base first, then the deployment's `blueprint/`
+  over it, whole file, no merge.
+
+**Knowledge base through git.**
+- The agent commits and pushes every write.
+- Obsidian's Git plugin pulls on the client's Mac.
+
+A fix is a one-line bump in each repo. The client can leave on a public tag. Git conflicts are visible; sync
+conflicts are not.

@@ -10,3 +10,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `CLAUDE.md`: the invariants every change holds and the five-word vocabulary (box, target, runtime, tier, blueprint).
+- `docs/architecture.md`: the architecture page — the essence, the box, the host, the `runtimes/hermes.yaml` and `box.yaml` contracts, secrets and backups, the tiers, the repos.

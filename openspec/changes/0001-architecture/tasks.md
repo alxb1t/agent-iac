@@ -5,7 +5,7 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
 ## Progress
 
 - [x] 1 — Invariants and vocabulary
-- [ ] 2 — The architecture page
+- [x] 2 — The architecture page
 - [ ] 3 — The backlog
 
 ## 1 — Invariants and vocabulary
@@ -20,17 +20,17 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
 
 ## 2 — The architecture page
 
-- [ ] 2.1 Create `docs/architecture.md` with the eight sections named in [the architecture page](design.md#the-architecture-page),
+- [x] 2.1 Create `docs/architecture.md` with the eight sections named in [the architecture page](design.md#the-architecture-page),
       in that order, each opening with one line on what it decides. Verify: `grep -c '^## ' docs/architecture.md` prints `8`.
-- [ ] 2.2 Place the box diagram from [D2](design.md#d2) under `## The box`, and the five sentences from [D1](design.md#d1)
+- [x] 2.2 Place the box diagram from [D2](design.md#d2) under `## The box`, and the five sentences from [D1](design.md#d1)
       under `## The essence`. Verify: `grep -q 'agent-iac (public collection)' docs/architecture.md && echo ok` prints `ok`.
-- [ ] 2.3 Place the Hermes manifest block from [D4](design.md#d4) under `## The runtime manifest`, and the `box.yaml`
+- [x] 2.3 Place the Hermes manifest block from [D4](design.md#d4) under `## The runtime manifest`, and the `box.yaml`
       block from [D5](design.md#d5) under `## box.yaml`. Verify: `grep -c '^blueprint_mount:' docs/architecture.md` prints `1`
       and `grep -c '^backup:' docs/architecture.md` prints `1`.
-- [ ] 2.4 Write `## The tiers` as the two-row table from [D8](design.md#d8), and `## Secrets and backups` and
+- [x] 2.4 Write `## The tiers` as the two-row table from [D8](design.md#d8), and `## Secrets and backups` and
       `## The repos and the knowledge base` from [D6](design.md#d6), [D7](design.md#d7) and [D9](design.md#d9).
       Verify: `grep -c '^| fenced |' docs/architecture.md` prints `1` and `grep -q 'restore drill' docs/architecture.md && echo ok` prints `ok`.
-- [ ] 2.5 **HALT CHECK** The page names no person, client, vault or machine path.
+- [x] 2.5 **HALT CHECK** The page names no person, client, vault or machine path.
       Verify: `grep -ci 'marat\|stylist\|katya\|vault\|/Users/' docs/architecture.md` prints `0`.
 
 ## 3 — The backlog
