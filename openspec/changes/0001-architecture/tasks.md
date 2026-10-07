@@ -6,7 +6,7 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
 
 - [x] 1 — Invariants and vocabulary
 - [x] 2 — The architecture page
-- [ ] 3 — The backlog
+- [x] 3 — The backlog
 
 ## 1 — Invariants and vocabulary
 
@@ -35,8 +35,8 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
 
 ## 3 — The backlog
 
-- [ ] 3.1 Write `.minions/backlog.md`: a `# Backlog` title, a `## 0001-architecture` heading, and one card per
+- [x] 3.1 Write `.minions/backlog.md`: a `# Backlog` title, a `## 0001-architecture` heading, and one card per
       line of [the cards](design.md#the-cards), in that order, in the shape of [D11](design.md#d11).
       Verify: `grep -c '^- \*\*0001·B' .minions/backlog.md` prints `18` and `grep -c -- '- \*\*Trigger:\*\*' .minions/backlog.md` prints `18`.
-- [ ] 3.2 **HALT CHECK** The backlog stays untracked, per the line's convention.
+- [x] 3.2 **HALT CHECK** The backlog stays untracked, per the line's convention.
       Verify: `git check-ignore -q .minions/backlog.md; echo $?` prints `0`.
