@@ -7,7 +7,7 @@ What agent-iac is, what a box is, and what an agent and a deployment declare.
 This section decides what the product is, and what it is not.
 
 agent-iac is a tool on the operator's machine. It turns a machine they already have into a **box** for one agent,
-and keeps it so by re-applying one file. Five sentences define it:
+and keeps it so by re-applying one file. It is defined by:
 
 1. A declared machine becomes the box.
 2. The agent runs rootless from a pinned official image, with its state on a volume.
@@ -53,7 +53,7 @@ The container's libc is not a boundary. The host is.
 
 This section decides what an agent declares to the box, and nothing more.
 
-A **runtime** is declared by a five-field manifest: `image · state · env · pre_backup · blueprint_mount`. The
+A **runtime** is declared by a manifest: `image · state · env · pre_backup · blueprint_mount`. The
 image tag comes from `box.yaml`'s `version`. agent-iac never parses the agent's own config. The agent never knows
 agent-iac exists.
 
@@ -74,7 +74,7 @@ blueprint_mount: /opt/data                     # where the blueprint's files are
 
 This section decides what a deployment declares.
 
-A deployment is one `box.yaml` of five fields: `name · target · runtime · version · backup`. Nothing in it is
+A deployment is one `box.yaml`: `name · target · runtime · version · backup`. Nothing in it is
 runtime-specific. A model choice, an allowlist of users or a cron line is the agent's setting and lives in the
 **blueprint**. `tier` and `egress` arrive with the fence.
 
@@ -101,10 +101,8 @@ This section decides how a secret reaches the box, and how a backup is proven.
 - restic runs from the host on cron over the manifest's `state` paths, after `pre_backup`.
 - The restic repository is a URL in `box.yaml`.
 - A **restore drill** from the operator's machine is a release gate of every change that touches backup.
-- Prune runs from the operator's machine, never on the box. A bucket credential, when a bucket is used, cannot
-  delete.
-
-The box must not hold the key that destroys its own backups. "Backed up" is proven by a restore, not a log line.
+- Prune runs from the operator's machine, never on the box: the box holds no key that can destroy its backups.
+  A bucket credential, when a bucket is used, cannot delete.
 
 ## The tiers
 
@@ -115,7 +113,7 @@ This section decides what the box enforces around the agent. A tier is what the 
 | open | the box as described above: rootless Podman, Tailscale-only inbound, encrypted secrets, restic backups |
 | fenced | open, plus a proxy container on an internal Podman network with a CONNECT allowlist by domain, nftables outbound, every deny logged |
 
-A third tier, *sealed*, is a backlog line. Tiers are keyed to the box, not to the agent's settings: an agent's
+A third tier, *sealed*, is not yet specified. Tiers are keyed to the box, not to the agent's settings: an agent's
 approval mode is a convenience, not a control.
 
 ## The repos and the knowledge base
