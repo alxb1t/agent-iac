@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-08
+
 ### Added
 
 - The collection `alxb1t.agent_iac` skeleton, the `uv` tooling, `box_load` and the `box.yaml` and manifest validators, so a bad `box.yaml` is refused before any connection.
