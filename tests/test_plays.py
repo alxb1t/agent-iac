@@ -39,3 +39,9 @@ def test_every_apply_reloads_systemd_before_the_start():
     start = task("roles/box/tasks/box.yml", "Start the service")["ansible.builtin.systemd_service"]
     assert start["daemon_reload"] is True
     assert not [t for t in tasks("roles/box/tasks/box.yml") if t.get("when") == "box_quadlet is changed"]
+
+
+# /proc shows a command line to every local user, so the auth key reaches tailscale in a root-only file.
+def test_the_join_keeps_the_auth_key_off_the_command_line():
+    join = task("roles/box/tasks/host.yml", "Join the tailnet")["ansible.builtin.command"]
+    assert "TAILSCALE_AUTH_KEY" not in join and "--auth-key=file:" in join

@@ -1,6 +1,8 @@
 #!/usr/sbin/nft -f
 # Inbound closed to the tailnet; outbound open. Why: 0002-the-box design D6.
-flush ruleset
+# Replace only this table: Tailscale keeps its own chains in other tables.
+table inet filter
+delete table inet filter
 table inet filter {
   chain input {
     type filter hook input priority 0; policy drop;

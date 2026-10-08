@@ -13,7 +13,6 @@ tags:
   - infrastructure
   - linux
 dependencies:
-  community.sops: "2.5.0"
   community.general: "13.5.0"
 build_ignore:
   - .venv

@@ -6,8 +6,8 @@ set -u
 
 fail() { logger -p user.err -t box-backup "{{ box.name }}: $1"; }
 
-# The start runs on every exit, so a failed backup leaves the agent up.
-trap 'systemctl --user -M {{ box_user }}@ start {{ box.name }} || fail "start failed"' EXIT
+# The start runs on every exit, so a failed backup leaves the agent up; a failed start fails the backup.
+trap 'systemctl --user -M {{ box_user }}@ start {{ box.name }} || { fail "start failed"; exit 1; }' EXIT
 
 systemctl --user -M {{ box_user }}@ stop {{ box.name }} || { fail "stop failed"; exit 1; }
 su - {{ box_user }} -c '

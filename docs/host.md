@@ -30,14 +30,16 @@ From a machine on the same network, `ssh <user>@<hostname>.local` reaches it.
 
 ## 3 — Run the bootstrap
 
-The operator sends the holder a Tailscale auth key (single use, pre-approved) and their SSH public key. On the Pi:
+The operator sends the holder a Tailscale auth key (single use, pre-approved) and their SSH public key. On the Pi,
+paste the auth key at the prompt of the first line, so it stays out of the shell's history:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/alxb1t/agent-iac/v0.2.0/contrib/bootstrap-pi.sh | sudo sh -s -- <tailscale auth key> "<operator ssh public key>"
+read -rs -p 'Tailscale auth key: ' key; echo
+curl -fsSL https://raw.githubusercontent.com/alxb1t/agent-iac/v0.2.0/contrib/bootstrap-pi.sh | sudo sh -s -- "$key" "<operator ssh public key>"
 ```
 
-It installs `python3` and Tailscale, joins the tailnet with the key, and puts the operator's key in root's
-`authorized_keys`. Running it again changes nothing.
+It installs `python3`, and Tailscale from Tailscale's apt repository behind its pinned signing key, joins the
+tailnet with the key, and puts the operator's key in root's `authorized_keys`. Running it again changes nothing.
 
 ## 4 — The operator confirms the node
 

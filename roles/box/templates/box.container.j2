@@ -6,7 +6,7 @@ After=network-online.target
 ContainerName={{ box.name }}
 Image={{ manifest.image }}:{{ box.version }}
 Volume={{ box.name }}-data:{{ manifest.blueprint_mount }}
-EnvironmentFile=%h/.config/agent-iac/{{ box.name }}.env
+EnvironmentFile={{ box_config }}/{{ box.name }}.env
 Exec=gateway run
 AutoUpdate=none
 

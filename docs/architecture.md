@@ -37,7 +37,7 @@ tailnet: the [host checklist](host.md). `target` is always a tailnet name.
  └─────────────────────┼────┘        │  │ state volume · blueprint copied │  │
                        ▼             │  └─────────────────────────────────┘  │
  agent-iac (public collection)       └───────────────────────────────────────┘
- client phone ─Telegram─▶ Telegram ◀─poll─ the box · client Mac ─tailnet─▶ gateway port
+ client phone ─Telegram─▶ Telegram ◀─poll─ the box
 ```
 
 ## The host
@@ -107,8 +107,9 @@ This section decides how a secret reaches the box, and how a backup is proven.
 - A restore is one step: stop, restore the snapshot over the volume, start.
 - The restic repository is a URL in `box.yaml`.
 - A **restore drill** from the operator's machine is a release gate of every change that touches backup.
-- Prune runs from the operator's machine, never on the box: the box holds no key that can destroy its backups.
-  A bucket credential, when a bucket is used, cannot delete.
+- Prune runs from the operator's machine, never on the box. In this version the repository is SFTP, and the
+  box's SFTP key and restic password can delete its snapshots; the credential that cannot delete comes with the
+  bucket, in a later version.
 
 ## The tiers
 

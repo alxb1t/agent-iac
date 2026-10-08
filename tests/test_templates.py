@@ -1,6 +1,7 @@
 """Every template renders with the sample vars, and each carries the lines its file must hold."""
 
 import shlex
+import subprocess
 
 import pytest
 
@@ -14,6 +15,7 @@ NEEDLES = {
     "box.container.j2": [
         "ContainerName=example",
         "Image=docker.io/nousresearch/hermes-agent:v2026.9.24",
+        "EnvironmentFile=/home/box/.config/agent-iac/example.env",
         "Exec=gateway run",
         "AutoUpdate=none",
         "Restart=always",
@@ -77,3 +79,56 @@ def test_backup_starts_the_box_on_every_exit(render):
     trap = next(line for line in text.splitlines() if line.startswith("trap "))
     assert "start example" in trap and trap.endswith(" EXIT")
     assert text.index("trap ") < text.index("stop example")
+
+
+def stub(bin_dir, name, body=""):
+    """Write an executable shell stub, e.g. stub(d, "su") → a `su` that does nothing and exits 0."""
+    path = bin_dir / name
+    path.write_text(f"#!/bin/sh\n{body}\nexit 0\n")
+    path.chmod(0o755)
+
+
+def run_backup(render, tmp_path, systemctl):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub(bin_dir, "systemctl", systemctl)
+    stub(bin_dir, "su")
+    stub(bin_dir, "logger")
+    script = tmp_path / "box-backup"
+    script.write_text(render("box-backup.sh.j2"))
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
+    return subprocess.run(["sh", str(script), "example"], env=env, capture_output=True, check=False)
+
+
+def test_backup_exits_zero_when_every_step_succeeds(render, tmp_path):
+    assert run_backup(render, tmp_path, "").returncode == 0
+
+
+# A backup that leaves the agent stopped must not read as a success to the playbook or cron.
+def test_backup_fails_when_the_start_fails(render, tmp_path):
+    assert run_backup(render, tmp_path, 'case "$*" in *" start "*) exit 1;; esac').returncode != 0
+
+
+# Tailscale keeps its own chains in other tables; the ruleset replaces only the table it owns.
+def test_ruleset_replaces_only_its_own_table(render):
+    lines = [line.strip() for line in render("nftables.conf.j2").splitlines()]
+    assert "flush ruleset" not in lines
+    assert lines.index("table inet filter") < lines.index("delete table inet filter") < lines.index("table inet filter {")
+
+
+# rsync reads a bare name with a colon in it as host:path; a name starting with "./" is always local.
+def test_blueprint_sync_hands_rsync_local_names(render, tmp_path):
+    bin_dir, data = tmp_path / "bin", tmp_path / "data"
+    staging = tmp_path / "config" / "example" / "blueprint"
+    for d in (bin_dir, data, staging):
+        d.mkdir(parents=True)
+    (staging / "notes:2026.md").write_text("x")
+    stub(bin_dir, "podman", 'case "$1" in volume) echo "$DATA";; unshare) shift; exec "$@";; esac')
+    stub(bin_dir, "rsync", 'printf "%s\\n" "$@" > "$ARGS"; echo ">f+++++++++ notes:2026.md"')
+    stub(bin_dir, "chown")
+    script = tmp_path / "box-blueprint-sync"
+    script.write_text(render("box-blueprint-sync.sh.j2", box_config=str(tmp_path / "config")))
+    args = tmp_path / "args"
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "DATA": str(data), "ARGS": str(args)}
+    subprocess.run(["sh", str(script)], env=env, check=True)
+    assert "./notes:2026.md" in args.read_text().splitlines()

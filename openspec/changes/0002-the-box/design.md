@@ -90,7 +90,7 @@ blueprint_mount: /opt/data
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D4 | `tasks/host.yml`, in order: `apt` packages `podman crun rsync restic nftables unattended-upgrades tailscale`; `/etc/apt/apt.conf.d/20auto-upgrades` from `auto-upgrades.j2`; the user `box` with `/home/box`, shell `/bin/sh`, no password, in no group but its own; `/etc/subuid` and `/etc/subgid` lines `box:100000:65536`; `loginctl enable-linger box`; `tailscaled` enabled; `tailscale up --authkey <key>` only when `tailscale status --json` reports `.BackendState != "Running"`; the nftables ruleset of [D6](#d6) written and the `nftables` service enabled only after `.BackendState == "Running"`; `/etc/cron.d/box-<name>` from `cron.j2` | Debian's rootless Podman as tasks; the ordering keeps the LAN path open until the tailnet works | `pam_rundir`; a second user for Ansible; `sudo` for the box user |
+| D4 | `tasks/host.yml`, in order: `apt` packages `podman crun rsync restic nftables unattended-upgrades tailscale`; `/etc/apt/apt.conf.d/20auto-upgrades` from `auto-upgrades.j2`; the user `box` with `/home/box`, shell `/bin/sh`, no password, in no group but its own; `/etc/subuid` and `/etc/subgid` lines `box:100000:65536`; `loginctl enable-linger box`; `tailscaled` enabled; `tailscale up --auth-key=file:<key file>` from a root-only `0600` file on `/run`, removed in an `always:`, only when `tailscale status --json` reports `.BackendState != "Running"`; the nftables ruleset of [D6](#d6) written and the `nftables` service enabled only after `.BackendState == "Running"`; `/etc/cron.d/box-<name>` from `cron.j2` | Debian's rootless Podman as tasks; the ordering keeps the LAN path open until the tailnet works | `pam_rundir`; a second user for Ansible; `sudo` for the box user |
 
 Every task names its idempotence: package, user and `lineinfile` tasks are idempotent natively; `enable-linger`
 is guarded by `ls /var/lib/systemd/linger/box`; `tailscale up` has `when:` on the status read and
@@ -108,7 +108,7 @@ After=network-online.target
 ContainerName={{ box.name }}
 Image={{ manifest.image }}:{{ box.version }}
 Volume={{ box.name }}-data:{{ manifest.blueprint_mount }}
-EnvironmentFile=%h/.config/agent-iac/{{ box.name }}.env
+EnvironmentFile={{ box_config }}/{{ box.name }}.env
 Exec=gateway run
 AutoUpdate=none
 
@@ -129,7 +129,8 @@ WantedBy=default.target
 ```
 # nftables.conf.j2 → /etc/nftables.conf — inbound closed to the tailnet; outbound open
 #!/usr/sbin/nft -f
-flush ruleset
+table inet filter
+delete table inet filter
 table inet filter {
   chain input {
     type filter hook input priority 0; policy drop;
@@ -147,7 +148,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D6 | the ruleset above, loaded by Debian's `nftables.service`; written only after Tailscale is up ([D4](#d4)) | a reader can hold it in their head; Tailscale's UDP port stays open so the node keeps direct paths; IPv6 neighbour discovery stays alive | an allowlist of LAN addresses; `ufw`; `iptables` |
+| D6 | the ruleset above, loaded by Debian's `nftables.service`; written only after Tailscale is up ([D4](#d4)); it replaces only its own table, never `flush ruleset` | a reader can hold it in their head; Tailscale's own chains, in other tables, survive a reload; Tailscale's UDP port stays open so the node keeps direct paths; IPv6 neighbour discovery stays alive | an allowlist of LAN addresses; `ufw`; `iptables` |
 
 ### D7 — The env file
 
@@ -159,7 +160,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D8 | the volume `<name>-data` is created with `podman volume create` guarded by `podman volume inspect`, as `box`; the blueprint is staged by `copy` to `/home/box/.config/agent-iac/<name>/blueprint/` — the collection's `blueprints/base/` first, the deployment's `blueprint/` over it — then `box-blueprint-sync.sh` runs `podman unshare rsync -a --omit-dir-times --checksum --itemize-changes <staging>/* <volume>/_data/` (the staged entries, not the staging root, so the agent's writes to the volume root and its directories read as no change) and `podman unshare chown -R 10000:10000` on the copied files; the task is `changed_when` the rsync output is non-empty, and notifies the restart handler | rootless volumes are owned by mapped ids only `podman unshare` can write; rsync's itemize output is the change signal | `podman cp`; a bind mount; copying on every apply unconditionally |
+| D8 | the volume `<name>-data` is created with `podman volume create` guarded by `podman volume inspect`, as `box`; the blueprint is staged by `copy` to `/home/box/.config/agent-iac/<name>/blueprint/` — the collection's `blueprints/base/` first, the deployment's `blueprint/` over it — then `box-blueprint-sync.sh` runs `podman unshare rsync -a --omit-dir-times --checksum --itemize-changes ./<entry>… <volume>/_data/` from inside `<staging>` (the staged entries, not the staging root, each as `./<entry>` so a name with a colon is never read as `host:path`, so the agent's writes to the volume root and its directories read as no change) and `podman unshare chown -R 10000:10000` on the copied files; the task is `changed_when` the rsync output is non-empty, and notifies the restart handler | rootless volumes are owned by mapped ids only `podman unshare` can write; rsync's itemize output is the change signal | `podman cp`; a bind mount; copying on every apply unconditionally |
 
 ### D9 — The service lifecycle
 
@@ -183,7 +184,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D11 | `/usr/local/bin/box-backup <name>`, run by root from `/etc/cron.d/box-<name>`: `systemctl --user -M box@ stop <name>`, then `su - box -c 'podman unshare restic backup <volume>/_data --tag <name>'` with the restic env file, then `systemctl --user -M box@ start <name>` in a `trap` so the start runs on failure too, errors to `logger`; the cron line `0 4 * * * root /usr/local/bin/box-backup <name>`; `restore.yml`: stop, `podman unshare restic restore <snapshot>:<volume>/_data --target <volume>/_data --delete` as `box`, so `--delete` reaches nothing outside the volume, start; `restore_drill.yml`: `restic restore latest --target /tmp/drill-<name>` then `diff -rq` against `<volume>/_data` excluding `logs/` and `sessions/`, non-zero on a difference; `status.yml`: `podman ps --filter name=<name> --format '{{.State}} {{.Image}}'` and `restic snapshots --latest 1 --json` | one minute of downtime buys a one-step restore; the trap keeps the agent up on a failed backup; the drill never touches the service | a `pre_backup` hook; a restore that needs `hermes import`; a systemd timer (one more unit for one line) |
+| D11 | `/usr/local/bin/box-backup <name>`, run by root from `/etc/cron.d/box-<name>`: `systemctl --user -M box@ stop <name>`, then `su - box -c 'podman unshare restic backup <volume>/_data --tag <name>'` with the restic env file, then `systemctl --user -M box@ start <name>` in a `trap` so the start runs on failure too, and a failed start exits non-zero, errors to `logger`; the cron line `0 4 * * * root /usr/local/bin/box-backup <name>`; `restore.yml`: stop, `podman unshare restic restore <snapshot>:<volume>/_data --target <volume>/_data --delete` as `box`, so `--delete` reaches nothing outside the volume, start; `restore_drill.yml`: `restic restore latest --target /tmp/drill-<name>` then `diff -rq` against `<volume>/_data` excluding `logs/` and `sessions/`, non-zero on a difference; `status.yml`: `podman ps --filter name=<name> --format '{{.State}} {{.Image}}'` and `restic snapshots --latest 1 --json` | one minute of downtime buys a one-step restore; the trap keeps the agent up on a failed backup; the drill never touches the service | a `pre_backup` hook; a restore that needs `hermes import`; a systemd timer (one more unit for one line) |
 
 ### D12 — The restic repository in this version
 
@@ -224,7 +225,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D16 | `docs/host.md`: the Imager settings (Raspberry Pi OS Lite 64-bit; hostname; the holder's user; the operator's SSH public key; Wi-Fi; SSH on), first boot, then `curl -fsSL <raw url of contrib/bootstrap-pi.sh> \| sudo sh -s -- <tailscale auth key> "<operator ssh public key>"`, and how the operator confirms the node on the tailnet | the one page a client follows; no agent-iac on their machine | a wizard; a second script |
+| D16 | `docs/host.md`: the Imager settings (Raspberry Pi OS Lite 64-bit; hostname; the holder's user; the operator's SSH public key; Wi-Fi; SSH on), first boot, then `read -rs key` so the auth key stays out of the shell's history and `curl -fsSL <raw url of contrib/bootstrap-pi.sh> \| sudo sh -s -- "$key" "<operator ssh public key>"`; the script installs Tailscale from its apt repository behind the signing key pinned by SHA-256 and joins with `--auth-key=file:`, and how the operator confirms the node on the tailnet | the one page a client follows; no agent-iac on their machine | a wizard; a second script |
 
 ## Dependencies
 
@@ -236,8 +237,8 @@ Python, in `pyproject.toml` under `[dependency-groups] dev`, resolved by `uv`:
 - `jinja2>=3.1` (also a dependency of ansible-core; named because the tests import it)
 - `pyyaml>=6.0`
 
-Ansible collections, in `requirements.yml` and `galaxy.yml`, each pinned to one exact version:
-- `community.sops==2.5.0`
+Ansible collections, in `requirements.yml` and `galaxy.yml`, each pinned to one exact version (`box_load` runs the
+`sops` binary itself, so no sops collection):
 - `community.general==13.5.0`
 
 Binaries on the operator's machine, documented in `README.md`, not installed by the change: `sops`, `age`,

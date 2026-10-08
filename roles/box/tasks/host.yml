@@ -54,12 +54,28 @@
   changed_when: false
   failed_when: false
 
-- name: Join the tailnet
-  ansible.builtin.command: tailscale up --authkey={{ box_secrets.TAILSCALE_AUTH_KEY }}
+# The key reaches tailscale in a root-only file on tmpfs, never on a command line that /proc shows.
+- name: Join the tailnet when it is not up
   when: (box_tailscale.stdout | default('{}', true) | from_json).BackendState | default('') != 'Running'
-  register: box_join
-  changed_when: true
-  no_log: true
+  block:
+    - name: Write the auth key for the join
+      ansible.builtin.copy:
+        content: "{{ box_secrets.TAILSCALE_AUTH_KEY }}"
+        dest: "{{ box_tailscale_key }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Join the tailnet
+      ansible.builtin.command: tailscale up --auth-key=file:{{ box_tailscale_key }}
+      register: box_join
+      changed_when: true
+  always:
+    - name: Remove the auth key file
+      ansible.builtin.file:
+        path: "{{ box_tailscale_key }}"
+        state: absent
 
 # The ruleset closes the LAN path, so it waits until the tailnet path works.
 - name: Wait for the tailnet to be up

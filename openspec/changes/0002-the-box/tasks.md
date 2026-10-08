@@ -70,12 +70,13 @@ ends on a green gate.
       `secrets.sops.yaml` encrypted to it, `requirements.yml` pinning `alxb1t.agent_iac` at `v0.2.0`.
       Verify: `grep -c '^sops:' examples/box/secrets.sops.yaml` prints `1` and `grep -c '^[A-Z_]*: ENC\[' examples/box/secrets.sops.yaml` prints `5`.
 - [x] 5.2 Write `contrib/bootstrap-pi.sh` per the `pi-bootstrap` delta: usage on missing arguments, a root check,
-      `apt-get install -y python3`, Tailscale's official install script, `tailscale up --authkey`, the key into
+      `apt-get install -y python3`, Tailscale's apt repository behind its pinned signing key, `tailscale up --auth-key=file:`, the key into
       root's `authorized_keys`, idempotent. Verify: `sh -n contrib/bootstrap-pi.sh; echo $?` prints `0` and `sh contrib/bootstrap-pi.sh; echo $?` prints usage then `1`.
 - [x] 5.3 Write `docs/host.md` per [D16](design.md#d16). Verify: `grep -c 'bootstrap-pi.sh' docs/host.md` prints `1`.
 - [x] 5.4 Edit `docs/architecture.md` and `CLAUDE.md` per [D15](design.md#d15).
       Verify: `grep -c 'pre_backup\|Alpine\|OpenRC' docs/architecture.md` prints `0`, `grep -c 'No systemd on the host' CLAUDE.md` prints `0` and `grep -c 'four-field manifest' CLAUDE.md` prints `1`.
 - [x] 5.5 Write `README.md` per [D15](design.md#d15). Verify: `grep -c 'docs/host.md' README.md` prints `1` and `grep -c 'make apply' README.md` prints `1`.
 - [x] 5.6 **HALT CHECK** No name, client, vault or machine path anywhere new.
-      Verify: `grep -rl '/Users/' roles playbooks plugins runtimes blueprints examples contrib docs README.md | wc -l` prints `0`, and the same
-      `grep -rli -f "$NAMES"` over those paths prints nothing, `$NAMES` being a file of the names to refuse, kept out of the repo.
+      Verify: `grep -rl '/Users/' roles playbooks plugins runtimes blueprints examples contrib docs README.md | wc -l` prints `0`, and
+      `test -s "$NAMES" && { grep -rli -f "$NAMES" <those paths>; echo "exit=$?"; }` prints only `exit=1`, `$NAMES` being
+      the gitignored `.minions/refused-names`, one name to refuse per line; a missing or empty file prints nothing and fails.
