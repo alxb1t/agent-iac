@@ -1,0 +1,5 @@
+---
+- name: Restore drill
+  hosts: localhost
+  gather_facts: false
+  tasks: []

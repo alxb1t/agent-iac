@@ -5,7 +5,7 @@ ends on a green gate.
 
 ## Progress
 
-- [ ] 1 — Skeleton and gate
+- [x] 1 — Skeleton and gate
 - [ ] 2 — The host tasks
 - [ ] 3 — The box tasks
 - [ ] 4 — Backup, restore, drill, status
@@ -13,19 +13,19 @@ ends on a green gate.
 
 ## 1 — Skeleton and gate
 
-- [ ] 1.1 Write `galaxy.yml` (namespace `alxb1t`, name `agent_iac`, version `0.2.0`, license `Apache-2.0`),
+- [x] 1.1 Write `galaxy.yml` (namespace `alxb1t`, name `agent_iac`, version `0.2.0`, license `Apache-2.0`),
       `pyproject.toml` with the dev group of [Dependencies](design.md#dependencies), `requirements.yml`, the empty role
       files of [D1](design.md#d1), and each playbook as a no-op play (`hosts: localhost`, `gather_facts: false`, `tasks: []`).
       Verify: `uv sync && uv run ansible-lint --version` prints a version.
-- [ ] 1.2 Append `.venv/`, `.ansible/`, `__pycache__/`, `.pytest_cache/` to `.gitignore`.
+- [x] 1.2 Append `.venv/`, `.ansible/`, `__pycache__/`, `.pytest_cache/` to `.gitignore`.
       Verify: `mkdir -p .ansible && git check-ignore .venv .ansible | wc -l` prints `2`.
-- [ ] 1.3 Replace the `gate` recipe in `Makefile` with the five commands of [D13](design.md#d13), in that order.
+- [x] 1.3 Replace the `gate` recipe in `Makefile` with the five commands of [D13](design.md#d13), in that order.
       Verify: `make -n gate | grep -c 'openspec validate\|yamllint\|ansible-lint\|syntax-check\|pytest'` prints `5`.
-- [ ] 1.4 Write `plugins/module_utils/box_schema.py` per [D3](design.md#d3) and `tests/test_box_schema.py` per
+- [x] 1.4 Write `plugins/module_utils/box_schema.py` per [D3](design.md#d3) and `tests/test_box_schema.py` per
       [D14](design.md#d14). Verify: `uv run pytest -q tests/test_box_schema.py` prints `passed` and no `failed`.
-- [ ] 1.5 Write `plugins/action/box_load.py` per [D2](design.md#d2) and `runtimes/hermes.yaml` per [D3](design.md#d3).
+- [x] 1.5 Write `plugins/action/box_load.py` per [D2](design.md#d2) and `runtimes/hermes.yaml` per [D3](design.md#d3).
       Verify: `grep -c '^blueprint_mount: /opt/data' runtimes/hermes.yaml` prints `1` and `grep -c 'pre_backup' runtimes/hermes.yaml` prints `0`.
-- [ ] 1.6 Write `.yamllint`, `.ansible-lint` and `meta/runtime.yml` per [D1](design.md#d1), and track the `uv.lock`
+- [x] 1.6 Write `.yamllint`, `.ansible-lint` and `meta/runtime.yml` per [D1](design.md#d1), and track the `uv.lock`
       that `uv sync` writes. Verify: `uv run ansible-lint` prints `Passed` and `test -f uv.lock && ! git check-ignore -q uv.lock; echo $?` prints `0`.
 
 ## 2 — The host tasks

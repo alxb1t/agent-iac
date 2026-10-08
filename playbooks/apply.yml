@@ -1,0 +1,5 @@
+---
+- name: Apply
+  hosts: localhost
+  gather_facts: false
+  tasks: []

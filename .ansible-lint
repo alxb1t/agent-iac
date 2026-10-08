@@ -1,0 +1,4 @@
+---
+# openspec/ holds the OpenSpec CLI's own files, not Ansible content.
+exclude_paths:
+  - openspec/

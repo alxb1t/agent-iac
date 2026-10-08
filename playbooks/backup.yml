@@ -1,0 +1,5 @@
+---
+- name: Backup
+  hosts: localhost
+  gather_facts: false
+  tasks: []

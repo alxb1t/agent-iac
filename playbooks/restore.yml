@@ -1,0 +1,5 @@
+---
+- name: Restore
+  hosts: localhost
+  gather_facts: false
+  tasks: []
