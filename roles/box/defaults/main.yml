@@ -1,1 +1,12 @@
 ---
+box_user: box
+box_packages:
+  - podman
+  - crun
+  - rsync
+  - restic
+  - nftables
+  - unattended-upgrades
+  - tailscale
+box_subid_start: 100000
+box_subid_count: 65536

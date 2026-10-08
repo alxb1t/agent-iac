@@ -6,7 +6,7 @@ ends on a green gate.
 ## Progress
 
 - [x] 1 — Skeleton and gate
-- [ ] 2 — The host tasks
+- [x] 2 — The host tasks
 - [ ] 3 — The box tasks
 - [ ] 4 — Backup, restore, drill, status
 - [ ] 5 — Example, contrib and docs
@@ -30,12 +30,12 @@ ends on a green gate.
 
 ## 2 — The host tasks
 
-- [ ] 2.1 Write `roles/box/tasks/host.yml` per [D4](design.md#d4) with the guards of [D10](design.md#d10), and
+- [x] 2.1 Write `roles/box/tasks/host.yml` per [D4](design.md#d4) with the guards of [D10](design.md#d10), and
       `roles/box/defaults/main.yml` with the package list and the subuid range.
       Verify: `grep -c 'tailscale up' roles/box/tasks/host.yml` prints `1` and `grep -c 'enable-linger' roles/box/tasks/host.yml` prints `1`.
-- [ ] 2.2 Write `roles/box/templates/nftables.conf.j2` per [D6](design.md#d6), `auto-upgrades.j2` per [D4](design.md#d4)
+- [x] 2.2 Write `roles/box/templates/nftables.conf.j2` per [D6](design.md#d6), `auto-upgrades.j2` per [D4](design.md#d4)
       and `cron.j2` per [D11](design.md#d11). Verify: `grep -c 'iifname "tailscale0" accept' roles/box/templates/nftables.conf.j2` prints `1`.
-- [ ] 2.3 Write `tests/conftest.py` with the sample vars and `tests/test_templates.py` asserting the needles of
+- [x] 2.3 Write `tests/conftest.py` with the sample vars and `tests/test_templates.py` asserting the needles of
       [D14](design.md#d14) for the three templates above. Verify: `uv run pytest -q tests/test_templates.py` prints `passed` and no `failed`.
 
 ## 3 — The box tasks

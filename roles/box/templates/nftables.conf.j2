@@ -1,0 +1,16 @@
+#!/usr/sbin/nft -f
+# Inbound closed to the tailnet; outbound open. Why: 0002-the-box design D6.
+flush ruleset
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif lo accept
+    iifname "tailscale0" accept
+    ct state established,related accept
+    udp dport 41641 accept
+    icmp type echo-request accept
+    icmpv6 type { echo-request, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+  }
+  chain forward { type filter hook forward priority 0; policy drop; }
+  chain output  { type filter hook output  priority 0; policy accept; }
+}
