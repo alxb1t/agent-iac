@@ -3,3 +3,12 @@
   ansible.builtin.systemd_service:
     name: nftables
     state: reloaded
+
+- name: Restart the box
+  ansible.builtin.systemd_service:
+    name: "{{ box.name }}"
+    state: restarted
+    scope: user
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"

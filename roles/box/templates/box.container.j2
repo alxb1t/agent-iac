@@ -1,0 +1,18 @@
+[Unit]
+Description=agent-iac box {{ box.name }}
+After=network-online.target
+
+[Container]
+ContainerName={{ box.name }}
+Image={{ manifest.image }}:{{ box.version }}
+Volume={{ box.name }}-data:{{ manifest.blueprint_mount }}
+EnvironmentFile=%h/.config/agent-iac/{{ box.name }}.env
+Exec=gateway run
+AutoUpdate=none
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,4 +1,5 @@
 ---
-# openspec/ holds the OpenSpec CLI's own files, not Ansible content.
+# openspec/ holds the OpenSpec CLI's own files; .ansible/ holds the gate's installed copy.
 exclude_paths:
   - openspec/
+  - .ansible/

@@ -7,7 +7,7 @@ ends on a green gate.
 
 - [x] 1 — Skeleton and gate
 - [x] 2 — The host tasks
-- [ ] 3 — The box tasks
+- [x] 3 — The box tasks
 - [ ] 4 — Backup, restore, drill, status
 - [ ] 5 — Example, contrib and docs
 
@@ -40,17 +40,17 @@ ends on a green gate.
 
 ## 3 — The box tasks
 
-- [ ] 3.1 Write `roles/box/templates/env.j2`, `restic.env.j2` per [D7](design.md#d7), `box-blueprint-sync.sh.j2` per
+- [x] 3.1 Write `roles/box/templates/env.j2`, `restic.env.j2` per [D7](design.md#d7), `box-blueprint-sync.sh.j2` per
       [D8](design.md#d8), `box.container.j2` per [D5](design.md#d5). Verify: `grep -c '^Exec=gateway run' roles/box/templates/box.container.j2` prints `1`.
-- [ ] 3.2 Write `roles/box/tasks/box.yml` per [D5](design.md#d5), [D7](design.md#d7)–[D9](design.md#d9) with the guards
+- [x] 3.2 Write `roles/box/tasks/box.yml` per [D5](design.md#d5), [D7](design.md#d7)–[D9](design.md#d9) with the guards
       of [D10](design.md#d10), `roles/box/handlers/main.yml` with the restart handler, and `roles/box/tasks/main.yml`
       including `host.yml` then `box.yml`. Verify: `grep -c 'no_log: true' roles/box/tasks/box.yml` prints `1` and `grep -c 'daemon-reload' roles/box/tasks/box.yml` prints `1`.
-- [ ] 3.3 Write `blueprints/base/config.yaml` and `blueprints/base/SOUL.md` as the minimal Hermes files, with no
+- [x] 3.3 Write `blueprints/base/config.yaml` and `blueprints/base/SOUL.md` as the minimal Hermes files, with no
       secret and no name. Verify: `grep -ci 'token\|api_key\|sk-' blueprints/base/config.yaml` prints `0`.
-- [ ] 3.4 Extend `tests/test_templates.py` with the needles for the four templates of 3.1, and write
+- [x] 3.4 Extend `tests/test_templates.py` with the needles for the four templates of 3.1, and write
       `tests/test_sops.py` with `tests/keys/example.age` per [D14](design.md#d14).
       Verify: `uv run pytest -q` prints `passed` and no `failed`.
-- [ ] 3.5 Write `playbooks/apply.yml`: `box_load`, then the role on the added host.
+- [x] 3.5 Write `playbooks/apply.yml`: `box_load`, then the role on the added host.
       Verify: `make gate` output contains `syntax-check` and no `ERROR`.
 
 ## 4 — Backup, restore, drill, status

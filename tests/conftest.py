@@ -1,5 +1,6 @@
 """Sample vars a template sees on a box named example, and a renderer that refuses an undefined one."""
 
+import shlex
 from pathlib import Path
 
 import jinja2
@@ -35,11 +36,14 @@ def sample_vars():
 
 @pytest.fixture
 def render(sample_vars):
+    # The template module's defaults; `quote` is Ansible's filter of the same name.
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(TEMPLATES),
         undefined=jinja2.StrictUndefined,
+        trim_blocks=True,
         keep_trailing_newline=True,
     )
+    env.filters["quote"] = shlex.quote
 
     def _render(name, **overrides):
         return env.get_template(name).render({**sample_vars, **overrides})

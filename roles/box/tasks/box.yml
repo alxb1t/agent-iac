@@ -1,1 +1,145 @@
 ---
+# The box side: env file, volume, blueprint, image and the quadlet. Guards: 0002-the-box design D10.
+- name: Read the box user's uid
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ box_user }}"
+
+- name: Set the box user's bus and staging path
+  ansible.builtin.set_fact:
+    box_home: "/home/{{ box_user }}"
+    box_user_env:
+      XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}"
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}/bus"
+
+- name: Create the box user's config directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ box_user }}"
+    group: "{{ box_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ box_home }}/.config", mode: "0755" }
+    - { path: "{{ box_home }}/.config/containers", mode: "0755" }
+    - { path: "{{ box_home }}/.config/containers/systemd", mode: "0755" }
+    - { path: "{{ box_home }}/.config/agent-iac", mode: "0700" }
+    - { path: "{{ box_home }}/.config/agent-iac/{{ box.name }}", mode: "0700" }
+    - { path: "{{ box_home }}/.config/agent-iac/{{ box.name }}/blueprint", mode: "0700" }
+
+- name: Write the agent's env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ box_home }}/.config/agent-iac/{{ box.name }}.env"
+    owner: "{{ box_user }}"
+    group: "{{ box_user }}"
+    mode: "0600"
+  no_log: true
+  notify: Restart the box
+
+- name: Look for the volume
+  ansible.builtin.command: podman volume inspect {{ box.name }}-data
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  register: box_volume
+  changed_when: false
+  failed_when: false
+
+- name: Create the volume
+  ansible.builtin.command: podman volume create {{ box.name }}-data
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  when: box_volume.rc != 0
+  changed_when: true
+
+- name: Look for the image
+  ansible.builtin.command: podman image exists {{ manifest.image }}:{{ box.version }}
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  register: box_image
+  changed_when: false
+  failed_when: false
+
+# Pulled apart from the start, so a missing image fails here, not in the restart loop.
+- name: Pull the image
+  ansible.builtin.command: podman pull {{ manifest.image }}:{{ box.version }}
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  when: box_image.rc != 0
+  changed_when: true
+
+# The deployment's blueprint first: filetree gives the first path precedence.
+- name: Stage the blueprint directories
+  ansible.builtin.file:
+    path: "{{ box_home }}/.config/agent-iac/{{ box.name }}/blueprint/{{ item.path }}"
+    state: directory
+    owner: "{{ box_user }}"
+    group: "{{ box_user }}"
+    mode: "0700"
+  loop: "{{ query('community.general.filetree', box_dir ~ '/blueprint', role_path ~ '/../../blueprints/base') }}"
+  when: item.state == 'directory'
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Stage the blueprint files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ box_home }}/.config/agent-iac/{{ box.name }}/blueprint/{{ item.path }}"
+    owner: "{{ box_user }}"
+    group: "{{ box_user }}"
+    mode: "0600"
+  loop: "{{ query('community.general.filetree', box_dir ~ '/blueprint', role_path ~ '/../../blueprints/base') }}"
+  when: item.state == 'file'
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install the blueprint sync script
+  ansible.builtin.template:
+    src: box-blueprint-sync.sh.j2
+    dest: /usr/local/bin/box-blueprint-sync
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy the blueprint into the volume
+  ansible.builtin.command: /usr/local/bin/box-blueprint-sync
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  register: box_sync
+  changed_when: box_sync.stdout | length > 0
+  notify: Restart the box
+
+- name: Write the quadlet
+  ansible.builtin.template:
+    src: box.container.j2
+    dest: "{{ box_home }}/.config/containers/systemd/{{ box.name }}.container"
+    owner: "{{ box_user }}"
+    group: "{{ box_user }}"
+    mode: "0644"
+  register: box_quadlet
+  notify: Restart the box
+
+# A handler would run too late: the start below needs the generated unit.
+- name: Run daemon-reload to generate the service from the quadlet  # noqa: no-handler
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  when: box_quadlet is changed
+
+# A quadlet unit is generated, so `enable` refuses it; its [Install] section starts it at boot.
+- name: Start the service
+  ansible.builtin.systemd_service:
+    name: "{{ box.name }}"
+    state: started
+    scope: user
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
