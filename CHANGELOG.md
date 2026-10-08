@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The host side of the `box` role: packages, unattended upgrades, the box user with linger and subuids, Tailscale ensured up, then an inbound ruleset closed to the tailnet, and the backup cron line.
 - The box side: the env file from sops, the volume, the base blueprint overlaid by the deployment's, the pinned image as a rootless quadlet, and `apply` running the role; a sops round-trip test with a throwaway age key.
 - Backup by stop, snapshot, start at 04:00, with the start in a `trap`; `restore`, `restore_drill` and `status`; `apply` initialises the restic repository and names the SFTP key to authorise.
+- `examples/box/`, `contrib/bootstrap-pi.sh` and `docs/host.md`: a deployment repo to copy and the one page a Pi's holder follows.
+
+### Changed
+
+- The host is Raspberry Pi OS with the agent as a quadlet user service; the runtime manifest drops `pre_backup` and has four fields. `docs/architecture.md`, `CLAUDE.md` and `README.md` say so.
 
 ## [0.1.0] - 2026-10-07
 

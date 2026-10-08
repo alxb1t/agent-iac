@@ -1,5 +1,6 @@
 ---
-# openspec/ holds the OpenSpec CLI's own files; .ansible/ holds the gate's installed copy.
+# Files no person writes: the OpenSpec CLI's, the gate's installed copy, and sops' ciphertext.
 exclude_paths:
   - openspec/
   - .ansible/
+  - examples/box/secrets.sops.yaml

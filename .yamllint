@@ -5,6 +5,9 @@ ignore-from-file: .gitignore
 rules:
   line-length:
     max: 120
+    # sops writes these lines; they are ciphertext, not ours to wrap.
+    ignore: |
+      *.sops.yaml
   comments:
     min-spaces-from-content: 1
   comments-indentation: false
