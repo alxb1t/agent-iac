@@ -1,5 +1,8 @@
 ---
 box_user: box
+box_home: "/home/{{ box_user }}"
+box_config: "{{ box_home }}/.config/agent-iac"
+box_restic_env: "{{ box_config }}/{{ box.name }}.restic.env"
 box_packages:
   - podman
   - crun

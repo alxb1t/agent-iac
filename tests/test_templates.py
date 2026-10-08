@@ -53,12 +53,6 @@ def test_env_file_holds_the_manifest_env_and_nothing_else(render, sample_vars):
     assert render("env.j2").splitlines() == expected
 
 
-def test_env_file_check_catches_a_host_secret(render, sample_vars):
-    manifest = {**sample_vars["manifest"], "env": sample_vars["manifest"]["env"] + ["TAILSCALE_AUTH_KEY"]}
-    expected = [f"{n}={sample_vars['box_secrets'][n]}" for n in sample_vars["manifest"]["env"]]
-    assert render("env.j2", manifest=manifest).splitlines() != expected
-
-
 def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
     secrets = {**sample_vars["box_secrets"], "RESTIC_PASSWORD": "a b'c"}
     assert "RESTIC_PASSWORD='a b'\"'\"'c'" in render("restic.env.j2", box_secrets=secrets)
@@ -66,11 +60,6 @@ def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
 
 def test_quadlet_publishes_no_port(render):
     assert "PublishPort" not in render("box.container.j2")
-
-
-def test_quadlet_check_catches_a_published_port(render):
-    text = render("box.container.j2").replace("[Service]", "PublishPort=8080:8080\n[Service]")
-    assert "PublishPort" in text
 
 
 def test_backup_starts_the_box_on_every_exit(render):

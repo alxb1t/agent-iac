@@ -1,9 +1,6 @@
 """The box.yaml and manifest validators: each fault is named, and the valid input is its twin."""
 
-from pathlib import Path
-
 import pytest
-import yaml
 
 from box_schema import (
     BOX_KEYS,
@@ -13,21 +10,7 @@ from box_schema import (
     validate_box,
     validate_manifest,
 )
-
-ROOT = Path(__file__).resolve().parents[1]
-
-VALID_BOX = {
-    "name": "example",
-    "target": "example-pi",
-    "runtime": "hermes",
-    "version": "v2026.9.24",
-    "backup": "sftp:backup@example-nas:/srv/restic/example",
-}
-
-
-@pytest.fixture
-def hermes():
-    return yaml.safe_load((ROOT / "runtimes" / "hermes.yaml").read_text())
+from conftest import VALID_BOX
 
 
 def test_valid_box_is_accepted():

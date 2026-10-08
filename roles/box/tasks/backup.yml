@@ -3,7 +3,7 @@
 - name: Write the restic env file
   ansible.builtin.template:
     src: restic.env.j2
-    dest: "/home/{{ box_user }}/.config/agent-iac/{{ box.name }}.restic.env"
+    dest: "{{ box_restic_env }}"
     owner: "{{ box_user }}"
     group: "{{ box_user }}"
     mode: "0600"
@@ -11,7 +11,7 @@
 
 - name: Create the box user's ssh directory
   ansible.builtin.file:
-    path: "/home/{{ box_user }}/.ssh"
+    path: "{{ box_home }}/.ssh"
     state: directory
     owner: "{{ box_user }}"
     group: "{{ box_user }}"
@@ -19,8 +19,8 @@
 
 - name: Generate the box user's SFTP key
   ansible.builtin.command:
-    argv: [ssh-keygen, -q, -t, ed25519, -N, "", -C, "{{ box.name }}-backup", -f, "/home/{{ box_user }}/.ssh/id_ed25519"]
-    creates: "/home/{{ box_user }}/.ssh/id_ed25519"
+    argv: [ssh-keygen, -q, -t, ed25519, -N, "", -C, "{{ box.name }}-backup", -f, "{{ box_home }}/.ssh/id_ed25519"]
+    creates: "{{ box_home }}/.ssh/id_ed25519"
   become: true
   become_user: "{{ box_user }}"
 
@@ -28,14 +28,14 @@
 - name: Accept a new backup host key on first use
   ansible.builtin.copy:
     content: "StrictHostKeyChecking accept-new\n"
-    dest: "/home/{{ box_user }}/.ssh/config"
+    dest: "{{ box_home }}/.ssh/config"
     owner: "{{ box_user }}"
     group: "{{ box_user }}"
     mode: "0600"
 
 - name: Read the restic repository
   ansible.builtin.shell: |
-    set -a; . /home/{{ box_user }}/.config/agent-iac/{{ box.name }}.restic.env; set +a
+    set -a; . {{ box_restic_env }}; set +a
     restic snapshots --latest 1 --quiet
   become: true
   become_user: "{{ box_user }}"
@@ -45,7 +45,7 @@
 
 - name: Initialise the restic repository
   ansible.builtin.shell: |
-    set -a; . /home/{{ box_user }}/.config/agent-iac/{{ box.name }}.restic.env; set +a
+    set -a; . {{ box_restic_env }}; set +a
     restic init
   become: true
   become_user: "{{ box_user }}"
@@ -54,19 +54,20 @@
   changed_when: box_restic_init.rc == 0
   failed_when: false
 
-- name: Read the SFTP public key
-  ansible.builtin.slurp:
-    src: "/home/{{ box_user }}/.ssh/id_ed25519.pub"
-  register: box_sftp_key
-  when: box_restic_init is not skipped and box_restic_init.rc != 0
-
 - name: Stop when the backup host refuses the box
-  ansible.builtin.fail:
-    msg: >-
-      restic init failed: {{ box_restic_init.stderr }}.
-      Authorise this key on the backup host, then apply again:
-      {{ box_sftp_key.content | b64decode | trim }}
   when: box_restic_init is not skipped and box_restic_init.rc != 0
+  block:
+    - name: Read the SFTP public key
+      ansible.builtin.slurp:
+        src: "{{ box_home }}/.ssh/id_ed25519.pub"
+      register: box_sftp_key
+
+    - name: Name the key to authorise
+      ansible.builtin.fail:
+        msg: >-
+          restic init failed: {{ box_restic_init.stderr }}.
+          Authorise this key on the backup host, then apply again:
+          {{ box_sftp_key.content | b64decode | trim }}
 
 - name: Install the backup script
   ansible.builtin.template:

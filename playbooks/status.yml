@@ -10,11 +10,12 @@
 - name: Show the box
   hosts: box
   gather_facts: false
+  vars_files:
+    - ../roles/box/defaults/main.yml
   vars:
-    box_user: box
     box_as_user: >-
       export XDG_RUNTIME_DIR=/run/user/$(id -u);
-      set -a; . ~/.config/agent-iac/{{ box.name }}.restic.env; set +a;
+      set -a; . {{ box_restic_env }}; set +a;
   tasks:
     - name: Read the container
       ansible.builtin.command:
@@ -38,7 +39,7 @@
 
     - name: Read the SFTP public key
       ansible.builtin.slurp:
-        src: "/home/{{ box_user }}/.ssh/id_ed25519.pub"
+        src: "{{ box_home }}/.ssh/id_ed25519.pub"
       register: box_sftp_key
 
     # With no snapshot yet, the third line names the key the backup host must authorise.

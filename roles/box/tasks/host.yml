@@ -18,7 +18,7 @@
 - name: Create the box user
   ansible.builtin.user:
     name: "{{ box_user }}"
-    home: "/home/{{ box_user }}"
+    home: "{{ box_home }}"
     shell: /bin/sh
     create_home: true
     password_lock: true
@@ -57,6 +57,7 @@
 - name: Join the tailnet
   ansible.builtin.command: tailscale up --authkey={{ box_secrets.TAILSCALE_AUTH_KEY }}
   when: (box_tailscale.stdout | default('{}', true) | from_json).BackendState | default('') != 'Running'
+  register: box_join
   changed_when: true
   no_log: true
 
@@ -68,6 +69,7 @@
   retries: 10
   delay: 3
   changed_when: false
+  when: box_join is not skipped
 
 - name: Write the inbound ruleset
   ansible.builtin.template:

@@ -12,7 +12,7 @@ trap 'systemctl --user -M {{ box_user }}@ start {{ box.name }} || fail "start fa
 systemctl --user -M {{ box_user }}@ stop {{ box.name }} || { fail "stop failed"; exit 1; }
 su - {{ box_user }} -c '
   export XDG_RUNTIME_DIR=/run/user/$(id -u)
-  set -a; . ~/.config/agent-iac/{{ box.name }}.restic.env; set +a
+  set -a; . {{ box_restic_env }}; set +a
   data=$(podman volume inspect --format "{% raw %}{{ .Mountpoint }}{% endraw %}" {{ box.name }}-data) &&
   podman unshare restic backup "$data" --tag {{ box.name }}
 ' || { fail "restic backup failed"; exit 1; }

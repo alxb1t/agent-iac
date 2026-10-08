@@ -11,12 +11,13 @@
 - name: Drill a restore
   hosts: box
   gather_facts: false
+  vars_files:
+    - ../roles/box/defaults/main.yml
   vars:
-    box_user: box
     box_drill: "/tmp/drill-{{ box.name }}"
     box_as_user: >-
       export XDG_RUNTIME_DIR=/run/user/$(id -u);
-      set -a; . ~/.config/agent-iac/{{ box.name }}.restic.env; set +a;
+      set -a; . {{ box_restic_env }}; set +a;
       data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data);
   tasks:
     - name: Drill in a scratch directory

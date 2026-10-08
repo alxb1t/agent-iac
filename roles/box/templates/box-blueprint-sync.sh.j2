@@ -2,11 +2,13 @@
 # Copy the staged blueprint into the box's volume; print what changed, nothing when unchanged.
 # Rootless volume files belong to mapped ids that only `podman unshare` can write. Why: 0002-the-box design D8.
 set -eu
-staging=/home/{{ box_user }}/.config/agent-iac/{{ box.name }}/blueprint
+staging={{ box_config }}/{{ box.name }}/blueprint
 data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data)
 podman unshare sh -c '
   set -eu
-  rsync -a --checksum --itemize-changes --no-owner --no-group "$1/" "$2/"
+  out=$(rsync -a --checksum --itemize-changes --no-owner --no-group "$1/" "$2/")
+  [ -n "$out" ] || exit 0
+  printf "%s\n" "$out"
   cd "$1"
   for f in * .[!.]*; do
     [ -e "$f" ] && chown -R 10000:10000 "$2/$f"

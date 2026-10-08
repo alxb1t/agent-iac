@@ -4,6 +4,7 @@
     name: nftables
     state: reloaded
 
+# A service this apply just started already runs the new files.
 - name: Restart the box
   ansible.builtin.systemd_service:
     name: "{{ box.name }}"
@@ -12,3 +13,4 @@
   become: true
   become_user: "{{ box_user }}"
   environment: "{{ box_user_env }}"
+  when: box_start is not changed
