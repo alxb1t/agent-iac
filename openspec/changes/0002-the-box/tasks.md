@@ -77,4 +77,5 @@ ends on a green gate.
       Verify: `grep -c 'pre_backup\|Alpine\|OpenRC' docs/architecture.md` prints `0`, `grep -c 'No systemd on the host' CLAUDE.md` prints `0` and `grep -c 'four-field manifest' CLAUDE.md` prints `1`.
 - [x] 5.5 Write `README.md` per [D15](design.md#d15). Verify: `grep -c 'docs/host.md' README.md` prints `1` and `grep -c 'make apply' README.md` prints `1`.
 - [x] 5.6 **HALT CHECK** No name, client, vault or machine path anywhere new.
-      Verify: `grep -rli 'marat\|stylist\|katya\|/Users/' roles playbooks plugins runtimes blueprints examples contrib docs README.md | wc -l` prints `0`.
+      Verify: `grep -rl '/Users/' roles playbooks plugins runtimes blueprints examples contrib docs README.md | wc -l` prints `0`, and the same
+      `grep -rli -f "$NAMES"` over those paths prints nothing, `$NAMES` being a file of the names to refuse, kept out of the repo.

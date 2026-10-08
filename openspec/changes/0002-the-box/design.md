@@ -159,13 +159,13 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D8 | the volume `<name>-data` is created with `podman volume create` guarded by `podman volume inspect`, as `box`; the blueprint is staged by `copy` to `/home/box/.config/agent-iac/<name>/blueprint/` — the collection's `blueprints/base/` first, the deployment's `blueprint/` over it — then `box-blueprint-sync.sh` runs `podman unshare rsync -a --checksum --itemize-changes <staging>/ <volume>/_data/` and `podman unshare chown -R 10000:10000` on the copied files; the task is `changed_when` the rsync output is non-empty, and notifies the restart handler | rootless volumes are owned by mapped ids only `podman unshare` can write; rsync's itemize output is the change signal | `podman cp`; a bind mount; copying on every apply unconditionally |
+| D8 | the volume `<name>-data` is created with `podman volume create` guarded by `podman volume inspect`, as `box`; the blueprint is staged by `copy` to `/home/box/.config/agent-iac/<name>/blueprint/` — the collection's `blueprints/base/` first, the deployment's `blueprint/` over it — then `box-blueprint-sync.sh` runs `podman unshare rsync -a --omit-dir-times --checksum --itemize-changes <staging>/* <volume>/_data/` (the staged entries, not the staging root, so the agent's writes to the volume root and its directories read as no change) and `podman unshare chown -R 10000:10000` on the copied files; the task is `changed_when` the rsync output is non-empty, and notifies the restart handler | rootless volumes are owned by mapped ids only `podman unshare` can write; rsync's itemize output is the change signal | `podman cp`; a bind mount; copying on every apply unconditionally |
 
 ### D9 — The service lifecycle
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D9 | `podman pull <image>:<version>` as `box`, guarded by `podman image exists`; the quadlet file `template`d; `daemon-reload` only when the file changed; `<name>` started by `systemd_service` with `state: started`, which reads `is-active` itself; a handler `restart <name>` notified by the blueprint sync, the env file and the quadlet file | the pull is separate so a missing image fails loudly, not in the restart loop | `AutoUpdate=registry` (the tag is pinned on purpose) |
+| D9 | `podman pull <image>:<version>` as `box`, guarded by `podman image exists`; the quadlet file `template`d; `daemon-reload` on every apply, by the start task, so an apply that failed after writing the quadlet still converges; `<name>` started by `systemd_service` with `state: started`, which reads `is-active` itself; a handler `restart <name>` notified by the blueprint sync, the env file and the quadlet file | the pull is separate so a missing image fails loudly, not in the restart loop | `AutoUpdate=registry` (the tag is pinned on purpose) |
 
 ### D10 — Idempotence guards, named
 
@@ -183,7 +183,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D11 | `/usr/local/bin/box-backup <name>`, run by root from `/etc/cron.d/box-<name>`: `systemctl --user -M box@ stop <name>`, then `su - box -c 'podman unshare restic backup <volume>/_data --tag <name>'` with the restic env file, then `systemctl --user -M box@ start <name>` in a `trap` so the start runs on failure too, errors to `logger`; the cron line `0 4 * * * root /usr/local/bin/box-backup <name>`; `restore.yml`: stop, `podman unshare restic restore <snapshot> --target / --delete` as `box`, start; `restore_drill.yml`: `restic restore latest --target /tmp/drill-<name>` then `diff -rq` against `<volume>/_data` excluding `logs/` and `sessions/`, non-zero on a difference; `status.yml`: `podman ps --filter name=<name> --format '{{.State}} {{.Image}}'` and `restic snapshots --latest 1 --json` | one minute of downtime buys a one-step restore; the trap keeps the agent up on a failed backup; the drill never touches the service | a `pre_backup` hook; a restore that needs `hermes import`; a systemd timer (one more unit for one line) |
+| D11 | `/usr/local/bin/box-backup <name>`, run by root from `/etc/cron.d/box-<name>`: `systemctl --user -M box@ stop <name>`, then `su - box -c 'podman unshare restic backup <volume>/_data --tag <name>'` with the restic env file, then `systemctl --user -M box@ start <name>` in a `trap` so the start runs on failure too, errors to `logger`; the cron line `0 4 * * * root /usr/local/bin/box-backup <name>`; `restore.yml`: stop, `podman unshare restic restore <snapshot>:<volume>/_data --target <volume>/_data --delete` as `box`, so `--delete` reaches nothing outside the volume, start; `restore_drill.yml`: `restic restore latest --target /tmp/drill-<name>` then `diff -rq` against `<volume>/_data` excluding `logs/` and `sessions/`, non-zero on a difference; `status.yml`: `podman ps --filter name=<name> --format '{{.State}} {{.Image}}'` and `restic snapshots --latest 1 --json` | one minute of downtime buys a one-step restore; the trap keeps the agent up on a failed backup; the drill never touches the service | a `pre_backup` hook; a restore that needs `hermes import`; a systemd timer (one more unit for one line) |
 
 ### D12 — The restic repository in this version
 
@@ -212,7 +212,7 @@ table inet filter {
 | `cron.j2` | `0 4 * * * root /usr/local/bin/box-backup example` |
 | `auto-upgrades.j2` | `APT::Periodic::Unattended-Upgrade "1";` |
 | `box-backup.sh.j2` | `trap` · `podman unshare restic backup` · `systemctl --user -M box@ start example` |
-| `box-blueprint-sync.sh.j2` | `rsync -a --checksum --itemize-changes` · `chown -R 10000:10000` |
+| `box-blueprint-sync.sh.j2` | `rsync -a --omit-dir-times --checksum --itemize-changes` · `chown -R 10000:10000` |
 
 ### D15 — The docs that change
 
@@ -236,9 +236,9 @@ Python, in `pyproject.toml` under `[dependency-groups] dev`, resolved by `uv`:
 - `jinja2>=3.1` (also a dependency of ansible-core; named because the tests import it)
 - `pyyaml>=6.0`
 
-Ansible collections, in `requirements.yml`:
-- `community.sops>=2.0.0,<3.0.0`
-- `community.general>=10.0.0`
+Ansible collections, in `requirements.yml` and `galaxy.yml`, each pinned to one exact version:
+- `community.sops==2.5.0`
+- `community.general==13.5.0`
 
 Binaries on the operator's machine, documented in `README.md`, not installed by the change: `sops`, `age`,
 `restic`, `openspec`, `uv`.

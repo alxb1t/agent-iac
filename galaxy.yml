@@ -13,8 +13,8 @@ tags:
   - infrastructure
   - linux
 dependencies:
-  community.sops: ">=2.0.0,<3.0.0"
-  community.general: ">=10.0.0"
+  community.sops: "2.5.0"
+  community.general: "13.5.0"
 build_ignore:
   - .venv
   - .ansible

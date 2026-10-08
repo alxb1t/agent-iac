@@ -8,6 +8,7 @@
         box_file: "{{ box_file }}"
 
 # Stop, replace the volume with a snapshot, start. Pick one with -e box_snapshot=<id>.
+# --delete removes what the snapshot lacks, so only the volume's subtree is restored, into the volume.
 - name: Restore the box
   hosts: box
   gather_facts: false
@@ -18,6 +19,7 @@
     box_as_user: >-
       export XDG_RUNTIME_DIR=/run/user/$(id -u);
       set -a; . {{ box_restic_env }}; set +a;
+      data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data) || exit 1;
   tasks:
     - name: Restore with the service stopped
       block:
@@ -33,7 +35,9 @@
               - "-"
               - "{{ box_user }}"
               - -c
-              - "{{ box_as_user }} podman unshare restic restore {{ box_snapshot }} --target / --delete"
+              - >-
+                {{ box_as_user }} podman unshare restic restore "{{ box_snapshot }}:$data"
+                --target "$data" --delete
           changed_when: true
       always:
         - name: Start the box

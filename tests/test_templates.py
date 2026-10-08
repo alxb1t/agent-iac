@@ -1,5 +1,7 @@
 """Every template renders with the sample vars, and each carries the lines its file must hold."""
 
+import shlex
+
 import pytest
 
 from conftest import TEMPLATES
@@ -17,7 +19,7 @@ NEEDLES = {
         "Restart=always",
     ],
     "restic.env.j2": ["RESTIC_REPOSITORY=", "RESTIC_PASSWORD="],
-    "box-blueprint-sync.sh.j2": ["rsync -a --checksum --itemize-changes", "chown -R 10000:10000"],
+    "box-blueprint-sync.sh.j2": ["rsync -a --omit-dir-times --checksum --itemize-changes", "chown -R 10000:10000"],
     "box-backup.sh.j2": ["trap", "podman unshare restic backup", "systemctl --user -M box@ start example"],
 }
 
@@ -60,6 +62,14 @@ def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
 
 def test_quadlet_publishes_no_port(render):
     assert "PublishPort" not in render("box.container.j2")
+
+
+# A source ending in "/" carries its own mode and time onto the volume root, which the agent writes into.
+def test_blueprint_sync_names_the_entries_not_the_staging_root(render):
+    line = next(line for line in render("box-blueprint-sync.sh.j2").splitlines() if "rsync " in line)
+    words = shlex.split(line[line.index("rsync ") : line.rindex(")")])
+    sources = [w for w in words[1:] if not w.startswith("-")][:-1]
+    assert sources and not [s for s in sources if s.endswith("/")]
 
 
 def test_backup_starts_the_box_on_every_exit(render):

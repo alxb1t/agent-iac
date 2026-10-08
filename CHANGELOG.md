@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The host is Raspberry Pi OS with the agent as a quadlet user service; the runtime manifest drops `pre_backup` and has four fields. `docs/architecture.md`, `CLAUDE.md` and `README.md` say so.
 
+### Fixed
+
+- `restore` restores only the volume, into the volume, so its `--delete` no longer empties the box user's home.
+- `apply` reloads systemd on every run, so an apply that failed after writing the quadlet no longer leaves the next one unable to start the service.
+- The blueprint sync copies the staged entries without directory times, so the agent's own writes no longer restart it on every apply.
+- `community.sops` and `community.general` are pinned to one exact version each, not ranges.
+- Task 5.6's halt check reads the names it refuses from a file kept out of the repo, instead of spelling them out.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

@@ -4,14 +4,21 @@
 set -eu
 staging={{ box_config }}/{{ box.name }}/blueprint
 data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data)
+# The staged entries, not the staging root, and no directory times: the agent writes into the volume root
+# and its directories, and neither may read as a blueprint change.
 podman unshare sh -c '
   set -eu
-  out=$(rsync -a --checksum --itemize-changes --no-owner --no-group "$1/" "$2/")
+  dst=$1
+  cd "$2"
+  set --
+  for f in * .[!.]*; do
+    if [ -e "$f" ]; then set -- "$@" "$f"; fi
+  done
+  [ $# -gt 0 ] || exit 0
+  out=$(rsync -a --omit-dir-times --checksum --itemize-changes --no-owner --no-group -- "$@" "$dst/")
   [ -n "$out" ] || exit 0
   printf "%s\n" "$out"
-  cd "$1"
-  for f in * .[!.]*; do
-    [ -e "$f" ] && chown -R 10000:10000 "$2/$f"
+  for f in "$@"; do
+    chown -R 10000:10000 "$dst/$f"
   done
-  true
-' sh "$staging" "$data"
+' sh "$data" "$staging"

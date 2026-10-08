@@ -79,7 +79,6 @@
     owner: "{{ box_user }}"
     group: "{{ box_user }}"
     mode: "0644"
-  register: box_quadlet
   notify: Restart the box
 
 - name: Run as the box user, on its bus
@@ -116,17 +115,13 @@
       changed_when: box_sync.stdout | length > 0
       notify: Restart the box
 
-    # A handler would run too late: the start below needs the generated unit.
-    - name: Run daemon-reload to generate the service from the quadlet  # noqa: no-handler
-      ansible.builtin.systemd_service:
-        daemon_reload: true
-        scope: user
-      when: box_quadlet is changed
-
     # A quadlet unit is generated, so `enable` refuses it; its [Install] section starts it at boot.
+    # daemon-reload generates it on every apply, so one that failed after writing the quadlet still
+    # converges; the reload alone does not mark the task changed.
     - name: Start the service
       ansible.builtin.systemd_service:
         name: "{{ box.name }}"
         state: started
         scope: user
+        daemon_reload: true
       register: box_start
