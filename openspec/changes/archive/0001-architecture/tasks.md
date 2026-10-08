@@ -31,7 +31,8 @@ Three phases: the invariants into `CLAUDE.md`, the architecture page, the backlo
       `## The repos and the knowledge base` from [D6](design.md#d6), [D7](design.md#d7) and [D9](design.md#d9).
       Verify: `grep -c '^| fenced |' docs/architecture.md` prints `1` and `grep -q 'restore drill' docs/architecture.md && echo ok` prints `ok`.
 - [x] 2.5 **HALT CHECK** The page names no person, client, vault or machine path.
-      Verify: `grep -ci 'marat\|stylist\|katya\|vault\|/Users/' docs/architecture.md` prints `0`.
+      Verify: `grep -ci 'vault\|/Users/' docs/architecture.md` prints `0`, and
+      `test -s .minions/refused-names && grep -ci -f .minions/refused-names docs/architecture.md` prints `0`.
 
 ## 3 — The backlog
 
