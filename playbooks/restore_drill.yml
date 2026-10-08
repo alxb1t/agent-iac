@@ -1,5 +1,50 @@
 ---
-- name: Restore drill
+- name: Load the box
   hosts: localhost
   gather_facts: false
-  tasks: []
+  tasks:
+    - name: Read box.yaml, its runtime and its secrets
+      alxb1t.agent_iac.box_load:
+        box_file: "{{ box_file }}"
+
+# Restore the latest snapshot beside the live state and compare; the service is untouched.
+- name: Drill a restore
+  hosts: box
+  gather_facts: false
+  vars:
+    box_user: box
+    box_drill: "/tmp/drill-{{ box.name }}"
+    box_as_user: >-
+      export XDG_RUNTIME_DIR=/run/user/$(id -u);
+      set -a; . ~/.config/agent-iac/{{ box.name }}.restic.env; set +a;
+      data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data);
+  tasks:
+    - name: Drill in a scratch directory
+      block:
+        - name: Restore the latest snapshot into the scratch directory
+          ansible.builtin.command:
+            argv:
+              - su
+              - "-"
+              - "{{ box_user }}"
+              - -c
+              - "{{ box_as_user }} podman unshare restic restore latest --target {{ box_drill }}"
+          changed_when: true
+
+        # logs/ and sessions/ are written while the agent runs, so they differ by design.
+        - name: Compare the snapshot with the live state
+          ansible.builtin.command:
+            argv:
+              - su
+              - "-"
+              - "{{ box_user }}"
+              - -c
+              - >-
+                {{ box_as_user }} podman unshare diff -rq --exclude=logs --exclude=sessions
+                "{{ box_drill }}$data" "$data"
+          changed_when: false
+      always:
+        - name: Remove the scratch directory
+          ansible.builtin.command:
+            argv: [su, "-", "{{ box_user }}", -c, "{{ box_as_user }} podman unshare rm -rf {{ box_drill }}"]
+          changed_when: true

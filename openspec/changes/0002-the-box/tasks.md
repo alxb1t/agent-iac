@@ -8,7 +8,7 @@ ends on a green gate.
 - [x] 1 — Skeleton and gate
 - [x] 2 — The host tasks
 - [x] 3 — The box tasks
-- [ ] 4 — Backup, restore, drill, status
+- [x] 4 — Backup, restore, drill, status
 - [ ] 5 — Example, contrib and docs
 
 ## 1 — Skeleton and gate
@@ -55,12 +55,12 @@ ends on a green gate.
 
 ## 4 — Backup, restore, drill, status
 
-- [ ] 4.1 Write `roles/box/templates/box-backup.sh.j2` and `roles/box/tasks/backup.yml` per [D11](design.md#d11) and
+- [x] 4.1 Write `roles/box/templates/box-backup.sh.j2` and `roles/box/tasks/backup.yml` per [D11](design.md#d11) and
       [D12](design.md#d12): the restic env file, the SFTP key, `restic init` guarded, the script installed.
       Verify: `grep -c 'trap' roles/box/templates/box-backup.sh.j2` prints `1` and `grep -c 'no_log: true' roles/box/tasks/backup.yml` prints `1`.
-- [ ] 4.2 Write `playbooks/backup.yml`, `playbooks/restore.yml`, `playbooks/restore_drill.yml`, `playbooks/status.yml`
+- [x] 4.2 Write `playbooks/backup.yml`, `playbooks/restore.yml`, `playbooks/restore_drill.yml`, `playbooks/status.yml`
       per [D11](design.md#d11). Verify: `ls playbooks | grep -c 'yml$'` prints `5`.
-- [ ] 4.3 Extend `tests/test_templates.py` with the needles for `box-backup.sh.j2`.
+- [x] 4.3 Extend `tests/test_templates.py` with the needles for `box-backup.sh.j2`.
       Verify: `uv run pytest -q` prints `passed` and no `failed`.
 
 ## 5 — Example, contrib and docs

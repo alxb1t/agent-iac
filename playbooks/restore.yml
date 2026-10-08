@@ -1,5 +1,41 @@
 ---
-- name: Restore
+- name: Load the box
   hosts: localhost
   gather_facts: false
-  tasks: []
+  tasks:
+    - name: Read box.yaml, its runtime and its secrets
+      alxb1t.agent_iac.box_load:
+        box_file: "{{ box_file }}"
+
+# Stop, replace the volume with a snapshot, start. Pick one with -e box_snapshot=<id>.
+- name: Restore the box
+  hosts: box
+  gather_facts: false
+  vars:
+    box_user: box
+    box_snapshot: latest
+    box_as_user: >-
+      export XDG_RUNTIME_DIR=/run/user/$(id -u);
+      set -a; . ~/.config/agent-iac/{{ box.name }}.restic.env; set +a;
+  tasks:
+    - name: Restore with the service stopped
+      block:
+        - name: Stop the box
+          ansible.builtin.command:
+            argv: [systemctl, --user, -M, "{{ box_user }}@", stop, "{{ box.name }}"]
+          changed_when: true
+
+        - name: Replace the volume with the snapshot
+          ansible.builtin.command:
+            argv:
+              - su
+              - "-"
+              - "{{ box_user }}"
+              - -c
+              - "{{ box_as_user }} podman unshare restic restore {{ box_snapshot }} --target / --delete"
+          changed_when: true
+      always:
+        - name: Start the box
+          ansible.builtin.command:
+            argv: [systemctl, --user, -M, "{{ box_user }}@", start, "{{ box.name }}"]
+          changed_when: true

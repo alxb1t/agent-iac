@@ -18,6 +18,7 @@ NEEDLES = {
     ],
     "restic.env.j2": ["RESTIC_REPOSITORY=", "RESTIC_PASSWORD="],
     "box-blueprint-sync.sh.j2": ["rsync -a --checksum --itemize-changes", "chown -R 10000:10000"],
+    "box-backup.sh.j2": ["trap", "podman unshare restic backup", "systemctl --user -M box@ start example"],
 }
 
 
@@ -70,3 +71,10 @@ def test_quadlet_publishes_no_port(render):
 def test_quadlet_check_catches_a_published_port(render):
     text = render("box.container.j2").replace("[Service]", "PublishPort=8080:8080\n[Service]")
     assert "PublishPort" in text
+
+
+def test_backup_starts_the_box_on_every_exit(render):
+    text = render("box-backup.sh.j2")
+    trap = next(line for line in text.splitlines() if line.startswith("trap "))
+    assert "start example" in trap and trap.endswith(" EXIT")
+    assert text.index("trap ") < text.index("stop example")
