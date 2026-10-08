@@ -122,7 +122,7 @@ WantedBy=default.target
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D5 | the quadlet above as the box user's systemd user unit; `systemctl --user daemon-reload` and `enable --now` run with `become_user: box` and the user bus in the task's `environment:` — `XDG_RUNTIME_DIR=/run/user/<uid>`, `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<uid>/bus` — the uid read from `getent passwd box` | quadlet is Podman's own systemd integration; lingering gives the user bus at boot without a login | an OpenRC-style script; a rootful system unit with `User=`; `podman generate systemd` |
+| D5 | the quadlet above as the box user's systemd user unit; `daemon-reload` and the start run through `ansible.builtin.systemd_service` with `scope: user`, `become_user: box` and the user bus in the task's `environment:` — `XDG_RUNTIME_DIR=/run/user/<uid>`, `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<uid>/bus` — the uid read from `getent passwd box` | quadlet is Podman's own systemd integration; lingering gives the user bus at boot without a login; systemd refuses to `enable` a generated unit, so the quadlet's `[Install]` section starts it at boot | an OpenRC-style script; a rootful system unit with `User=`; `podman generate systemd` |
 
 ### D6 — The ruleset
 
@@ -165,7 +165,7 @@ table inet filter {
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D9 | `podman pull <image>:<version>` as `box`, guarded by `podman image exists`; the quadlet file `template`d; `daemon-reload` only when the file changed; `enable --now <name>` guarded by `is-active`; a handler `restart <name>` notified by the blueprint sync, the env file and the quadlet file | the pull is separate so a missing image fails loudly, not in the restart loop | `AutoUpdate=registry` (the tag is pinned on purpose) |
+| D9 | `podman pull <image>:<version>` as `box`, guarded by `podman image exists`; the quadlet file `template`d; `daemon-reload` only when the file changed; `<name>` started by `systemd_service` with `state: started`, which reads `is-active` itself; a handler `restart <name>` notified by the blueprint sync, the env file and the quadlet file | the pull is separate so a missing image fails loudly, not in the restart loop | `AutoUpdate=registry` (the tag is pinned on purpose) |
 
 ### D10 — Idempotence guards, named
 
@@ -176,7 +176,7 @@ table inet filter {
 | copy the blueprint | rsync itemize output | the output is non-empty |
 | join the tailnet | `tailscale status --json` `.BackendState` | `tailscale up` ran |
 | enable linger | `/var/lib/systemd/linger/box` exists | the file was created |
-| enable the service | `systemctl --user is-active <name>` | `enable --now` ran |
+| start the service | `is-active`, read by `systemd_service` | the start ran |
 | write any file | `template`/`copy` checksum | the checksum differed |
 
 ### D11 — Backup, restore, drill, status
