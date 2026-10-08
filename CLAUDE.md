@@ -1,14 +1,16 @@
 # agent-iac — shared context for Claude Code
 
-Work in progress: no code yet.
+An Ansible collection, `alxb1t.agent_iac`, whose `box` role makes a host a box; the gate's tools are a `uv` project
+beside it.
 
 > **This file is what is true of this repo. It is not a script.** What to do comes from the task you were given.
 
 ## The quality gate — `make gate`
 
 The gate is **`make gate`**, run at the repository root. The `Makefile` recipe is the one list of its commands;
-prose names `make gate` and never copies them. Today it validates the specs. A new command lands through a change
-whose cut names the gate recipe in a task.
+prose names `make gate` and never copies them. Today it validates the specs, lints the YAML and the Ansible,
+syntax-checks the playbooks and runs the tests. A new command lands through a change whose cut names the gate
+recipe in a task. The tests need `sops` and `age` on `PATH`.
 
 ## How a change is cut here
 
@@ -36,10 +38,10 @@ CLI is recorded, not pinned: `@fission-ai/openspec@1.11.0`, resolved on `PATH`.
 - **Creates no machines.** agent-iac starts from "a host exists". Flashing a Pi or creating a VPS is outside it.
 - **Extends, never wraps.** The agent runs its official image unmodified and never knows agent-iac exists.
 - **The box never reaches back.** Nothing on a box names the operator's machine, the vault or this repo's path.
-- **No systemd on the host.** The host is Alpine with OpenRC. A mechanism that needs systemd is not used.
+- **One host OS.** Raspberry Pi OS (Debian) today; another host OS lands as a decision, not a branch in a role.
 
 ## Vocabulary — five words, one meaning each
 
 **box** · one machine made into a home for one agent — **target** · the machine before it is a box, as SSH
-reaches it — **runtime** · one kind of agent, declared by a five-field manifest — **tier** · what the box
+reaches it — **runtime** · one kind of agent, declared by a four-field manifest — **tier** · what the box
 enforces around the agent: `open` or `fenced` — **blueprint** · the agent's own config files, copied in at start.

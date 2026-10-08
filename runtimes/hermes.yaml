@@ -1,0 +1,10 @@
+---
+# runtimes/hermes.yaml — env names re-checked against the pinned image's docs at every version bump
+image: docker.io/nousresearch/hermes-agent
+state:
+  - /opt/data
+env:
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_ALLOWED_USERS
+  - OPENROUTER_API_KEY
+blueprint_mount: /opt/data

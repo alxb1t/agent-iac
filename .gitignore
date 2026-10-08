@@ -1,2 +1,6 @@
 # Run output, not source: `git add -A` would sweep it into history.
 .minions/
+.venv/
+.ansible/
+__pycache__/
+.pytest_cache/

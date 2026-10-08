@@ -1,0 +1,5 @@
+---
+# The throwaway key from tests/keys/example.age; a real deployment puts its own age public key here.
+creation_rules:
+  - path_regex: secrets\.sops\.yaml$
+    age: age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q

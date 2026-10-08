@@ -1,0 +1,22 @@
+# The gate's Python tools; the collection itself is galaxy.yml.
+[project]
+name = "agent-iac"
+version = "0.2.0"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+  "ansible-core>=2.19,<3",
+  "ansible-lint>=25.0",
+  "yamllint>=1.35",
+  "pytest>=8.0",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["plugins/module_utils"]

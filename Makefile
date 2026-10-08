@@ -3,5 +3,13 @@
 # cut names this recipe in a task.
 .PHONY: gate
 
+# The playbooks resolve the collection's own FQCNs, so it is installed first; a syntax check
+# needs none of its dependencies.
+COLLECTIONS = .ansible/collections
+
 gate:
 	openspec validate --all --strict --no-interactive
+	uv run yamllint .
+	uv run ansible-lint
+	export ANSIBLE_COLLECTIONS_PATH=$(COLLECTIONS) && uv run ansible-galaxy collection install --force --no-deps -p $(COLLECTIONS) . >/dev/null && uv run ansible-playbook --syntax-check playbooks/*.yml
+	uv run pytest -q

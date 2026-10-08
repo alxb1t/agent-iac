@@ -1,0 +1,4 @@
+---
+# The base Hermes config every box starts from; a deployment's blueprint/config.yaml replaces it.
+model:
+  provider: openrouter

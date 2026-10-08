@@ -1,0 +1,16 @@
+---
+- name: Load the box
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read box.yaml, its runtime and its secrets
+      alxb1t.agent_iac.box_load:
+        box_file: "{{ box_file }}"
+
+- name: Back up the box
+  hosts: box
+  gather_facts: false
+  tasks:
+    - name: Stop, snapshot and start the box
+      ansible.builtin.command: /usr/local/bin/box-backup {{ box.name }}
+      changed_when: true

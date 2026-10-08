@@ -1,0 +1,18 @@
+---
+# The rules ansible-lint needs yamllint to agree with; gitignored paths are not ours.
+extends: default
+ignore-from-file: .gitignore
+rules:
+  line-length:
+    max: 120
+    # sops writes these lines; they are ciphertext, not ours to wrap.
+    ignore: |
+      *.sops.yaml
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

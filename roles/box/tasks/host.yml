@@ -1,0 +1,111 @@
+---
+# The host side of a box. Order and guards: 0002-the-box design D4 and D10.
+- name: Install the host packages
+  ansible.builtin.apt:
+    name: "{{ box_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable unattended upgrades
+  ansible.builtin.template:
+    src: auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the box user
+  ansible.builtin.user:
+    name: "{{ box_user }}"
+    home: "{{ box_home }}"
+    shell: /bin/sh
+    create_home: true
+    password_lock: true
+
+- name: Give the box user its subordinate ids
+  ansible.builtin.lineinfile:
+    path: "{{ item }}"
+    regexp: "^{{ box_user }}:"
+    line: "{{ box_user }}:{{ box_subid_start }}:{{ box_subid_count }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/subuid
+    - /etc/subgid
+
+# Lingering starts the user's systemd at boot, without a login.
+- name: Let the box user's services run without a login
+  ansible.builtin.command: loginctl enable-linger {{ box_user }}
+  args:
+    creates: "/var/lib/systemd/linger/{{ box_user }}"
+
+- name: Enable tailscaled
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+- name: Read the tailnet state
+  ansible.builtin.command: tailscale status --json
+  register: box_tailscale
+  changed_when: false
+  failed_when: false
+
+# The key reaches tailscale in a root-only file on tmpfs, never on a command line that /proc shows.
+- name: Join the tailnet when it is not up
+  when: (box_tailscale.stdout | default('{}', true) | from_json).BackendState | default('') != 'Running'
+  block:
+    - name: Write the auth key for the join
+      ansible.builtin.copy:
+        content: "{{ box_secrets.TAILSCALE_AUTH_KEY }}"
+        dest: "{{ box_tailscale_key }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Join the tailnet
+      ansible.builtin.command: tailscale up --auth-key=file:{{ box_tailscale_key }}
+      register: box_join
+      changed_when: true
+  always:
+    - name: Remove the auth key file
+      ansible.builtin.file:
+        path: "{{ box_tailscale_key }}"
+        state: absent
+
+# The ruleset closes the LAN path, so it waits until the tailnet path works.
+- name: Wait for the tailnet to be up
+  ansible.builtin.command: tailscale status --json
+  register: box_tailscale_up
+  until: (box_tailscale_up.stdout | default('{}', true) | from_json).BackendState | default('') == 'Running'
+  retries: 10
+  delay: 3
+  changed_when: false
+  when: box_join is not skipped
+
+- name: Write the inbound ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Reload nftables
+
+- name: Enable nftables
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started
+
+- name: Schedule the backup
+  ansible.builtin.template:
+    src: cron.j2
+    dest: "/etc/cron.d/box-{{ box.name }}"
+    owner: root
+    group: root
+    mode: "0644"

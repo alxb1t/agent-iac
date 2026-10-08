@@ -1,0 +1,18 @@
+#!/bin/sh
+# Stop the box, snapshot its volume, start it again. Why stop-snapshot-start: 0002-the-box design D11.
+# Run by root from /etc/cron.d/box-{{ box.name }}.
+set -u
+[ "${1:-}" = "{{ box.name }}" ] || { echo "usage: box-backup {{ box.name }}" >&2; exit 2; }
+
+fail() { logger -p user.err -t box-backup "{{ box.name }}: $1"; }
+
+# The start runs on every exit, so a failed backup leaves the agent up; a failed start fails the backup.
+trap 'systemctl --user -M {{ box_user }}@ start {{ box.name }} || { fail "start failed"; exit 1; }' EXIT
+
+systemctl --user -M {{ box_user }}@ stop {{ box.name }} || { fail "stop failed"; exit 1; }
+su - {{ box_user }} -c '
+  export XDG_RUNTIME_DIR=/run/user/$(id -u)
+  set -a; . {{ box_restic_env }}; set +a
+  data=$(podman volume inspect --format "{% raw %}{{ .Mountpoint }}{% endraw %}" {{ box.name }}-data) &&
+  podman unshare restic backup "$data" --tag {{ box.name }}
+' || { fail "restic backup failed"; exit 1; }

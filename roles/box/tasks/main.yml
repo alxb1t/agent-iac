@@ -1,0 +1,9 @@
+---
+- name: Make the host
+  ansible.builtin.import_tasks: host.yml
+
+- name: Make the box
+  ansible.builtin.import_tasks: box.yml
+
+- name: Make the backup
+  ansible.builtin.import_tasks: backup.yml

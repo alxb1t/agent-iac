@@ -1,0 +1,46 @@
+---
+- name: Load the box
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read box.yaml, its runtime and its secrets
+      alxb1t.agent_iac.box_load:
+        box_file: "{{ box_file }}"
+
+# Stop, replace the volume with a snapshot, start. Pick one with -e box_snapshot=<id>.
+# --delete removes what the snapshot lacks, so only the volume's subtree is restored, into the volume.
+- name: Restore the box
+  hosts: box
+  gather_facts: false
+  vars_files:
+    - ../roles/box/defaults/main.yml
+  vars:
+    box_snapshot: latest
+    box_as_user: >-
+      export XDG_RUNTIME_DIR=/run/user/$(id -u);
+      set -a; . {{ box_restic_env }}; set +a;
+      data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data) || exit 1;
+  tasks:
+    - name: Restore with the service stopped
+      block:
+        - name: Stop the box
+          ansible.builtin.command:
+            argv: [systemctl, --user, -M, "{{ box_user }}@", stop, "{{ box.name }}"]
+          changed_when: true
+
+        - name: Replace the volume with the snapshot
+          ansible.builtin.command:
+            argv:
+              - su
+              - "-"
+              - "{{ box_user }}"
+              - -c
+              - >-
+                {{ box_as_user }} podman unshare restic restore "{{ box_snapshot }}:$data"
+                --target "$data" --delete
+          changed_when: true
+      always:
+        - name: Start the box
+          ansible.builtin.command:
+            argv: [systemctl, --user, -M, "{{ box_user }}@", start, "{{ box.name }}"]
+          changed_when: true

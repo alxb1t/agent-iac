@@ -1,0 +1,5 @@
+---
+collections:
+  - name: https://github.com/alxb1t/agent-iac.git
+    type: git
+    version: v0.2.0

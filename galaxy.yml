@@ -1,0 +1,21 @@
+---
+namespace: alxb1t
+name: agent_iac
+version: 0.2.0
+readme: README.md
+authors:
+  - alxb1t
+description: Make a host a box for one agent, running its official image rootless.
+license:
+  - Apache-2.0
+repository: https://github.com/alxb1t/agent-iac
+tags:
+  - infrastructure
+  - linux
+dependencies:
+  community.general: "13.5.0"
+build_ignore:
+  - .venv
+  - .ansible
+  - .minions
+  - .pytest_cache
