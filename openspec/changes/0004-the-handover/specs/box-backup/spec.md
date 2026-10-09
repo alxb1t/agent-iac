@@ -27,6 +27,10 @@ the bucket refuses SHALL be logged as a warning and SHALL NOT fail the backup.
 - **WHEN** an upload leaves six archives of the box in the bucket
 - **THEN** the oldest is deleted and five remain
 
+#### Scenario: Another box's archives stay
+- **WHEN** the bucket also holds the archives of a box whose name starts with this one's, `example-two` beside `example`
+- **THEN** `example`'s backup deletes none of them, and its restore, drill and status never pick one
+
 #### Scenario: A locked archive stays
 - **WHEN** the oldest archive past the newest five is younger than the bucket's lock
 - **THEN** the delete is refused, a warning is logged, and the backup exits zero
@@ -40,6 +44,10 @@ live volume, and SHALL remove the scratch volume and every decrypted copy at the
 #### Scenario: A clean drill
 - **WHEN** `restore-drill` runs after a backup
 - **THEN** it prints the archive's name and the session count, and exits zero
+
+#### Scenario: An unreachable box leaves no decrypted copy
+- **WHEN** `restore-drill` runs while the box is off the network, or the box drops during the copy of the zip
+- **THEN** it fails before decrypting, or removes the decrypted archive from the machine running it
 
 #### Scenario: A broken archive fails the drill
 - **WHEN** the newest archive's `state.db` fails its integrity check
@@ -60,6 +68,10 @@ agent to resume with its previous state. The decrypted archive SHALL be removed 
 #### Scenario: The KB comes back from its remote
 - **WHEN** `restore` runs on a box with `kb` set
 - **THEN** `/opt/data/kb` is a clone of the KB repo with its history, not the archive's copy
+
+#### Scenario: An unreachable box leaves no decrypted copy
+- **WHEN** `restore` runs while the box is off the network, or the box drops during the copy of the zip
+- **THEN** it fails before decrypting, or removes the decrypted archive from the machine running it
 
 #### Scenario: The client restores alone
 - **WHEN** the client runs `make restore` from their deployment repo with their own age key

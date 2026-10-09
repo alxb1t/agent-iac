@@ -1,5 +1,6 @@
 """The playbooks and the role's tasks, read as YAML: the commands that can lose state or wedge an apply."""
 
+import fnmatch
 import shlex
 import sqlite3
 import subprocess
@@ -8,7 +9,7 @@ import sys
 import pytest
 import yaml
 
-from conftest import ROOT, jinja_env
+from conftest import ARCHIVES, OTHER_BOX_ARCHIVES, ROOT, jinja_env
 
 
 def plays(path):
@@ -47,8 +48,8 @@ RESTORE_BLOCK = "Restore with the service stopped"
 def test_restore_stops_before_the_import_and_starts_in_always():
     block = task("playbooks/restore.yml", RESTORE_BLOCK)
     steps = names(block["block"])
-    assert steps.index("Stop the box") < steps.index("Import the archive")
-    assert {"Start the box", "Remove the zip from the box", "Remove the decrypted archive"} <= set(names(block["always"]))
+    assert steps.index("Hand the zip to the box") < steps.index("Stop the box") < steps.index("Import the archive")
+    assert {"Start the box", "Remove the zip from the box"} <= set(names(block["always"]))
 
 
 def import_words(path, sample_vars):
@@ -114,12 +115,52 @@ def test_decrypt_check_catches_a_decrypt_on_the_box():
     assert decrypting_hosts([play]) == {"box"}
 
 
+# Restore, the drill and status take the newest name rclone lists: never another box's: 0004-the-handover review R1.
+def test_restore_drill_and_status_list_only_this_boxs_archives(sample_vars):
+    listing = OTHER_BOX_ARCHIVES + ARCHIVES
+    listed = [name for name in listing if fnmatch.fnmatchcase(name, sample_vars["box_archives_glob"])]
+    assert sorted(listed) == sorted(ARCHIVES)
+    assert sorted(listed)[-1] == "example-20261007T040000Z.zip.age"
+    assert "{{ box_archives_glob }}" in argv(task(FETCH, "List the archives"))
+    assert "--include '{{ box_archives_glob }}'" in argv(task("playbooks/status.yml", "List the archives"))[-1]
+
+
+SEND = "roles/box/tasks/send.yml"
+
+
+def includes(t, tasks_from):
+    return t.get("ansible.builtin.include_role", {}).get("tasks_from") == tasks_from
+
+
+# The decrypted zip leaves this machine with its copy to the box, whatever the box does: 0004-the-handover review R2.
+def test_the_decrypted_zip_is_removed_here_whatever_the_box_does():
+    [hand] = plays(SEND)
+    copy, check = hand["block"]
+    assert copy["name"] == "Copy the zip to the box" and copy["ignore_unreachable"] is True
+    assert check["ansible.builtin.assert"]["that"] == f"{copy['register']} is not unreachable"
+    [rm] = hand["always"]
+    assert rm["delegate_to"] == "localhost" and rm["become"] is False
+    assert rm["ansible.builtin.file"] == {"path": "{{ box_local }}", "state": "absent"}
+
+
+# An unreachable box stops the run before the decrypt; once decrypted, the zip's hand-over is the box's first task.
+@pytest.mark.parametrize("path", ["playbooks/restore.yml", "playbooks/restore_drill.yml"])
+def test_the_box_is_reached_before_the_decrypt_and_handed_the_zip_first(path):
+    play_list = plays(path)
+    fetch = next(i for i, p in enumerate(play_list) if any(includes(t, "fetch.yml") for t in walk(p["tasks"])))
+    reach = [p for p in play_list[:fetch] if p["hosts"] == "box"]
+    assert reach and any(includes(t, "user_env.yml") for t in walk(reach[0]["tasks"]))
+    [box_play] = [p for p in play_list[fetch + 1 :] if p["hosts"] == "box"]
+    first = next(t for t in walk(box_play["tasks"]) if "block" not in t)
+    assert includes(first, "send.yml")
+
+
 def test_the_drill_removes_its_scratch_volume_on_every_exit():
     block = task("playbooks/restore_drill.yml", "Drill in a scratch volume")
     rm = task("playbooks/restore_drill.yml", "Remove the scratch volume")
     assert rm in block["always"]
     assert argv(rm) == ["podman", "volume", "rm", "-f", "{{ box.name }}-drill"]
-    assert "Remove the decrypted archive" in names(block["always"])
+    assert "Remove the zip from the box" in names(block["always"])
 
 
 # An apply that failed after writing the quadlet leaves it unchanged, so the reload cannot hang on that change.

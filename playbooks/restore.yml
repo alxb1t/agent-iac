@@ -7,6 +7,16 @@
       alxb1t.agent_iac.box_load:
         box_file: "{{ box_file }}"
 
+# An unreachable box stops the run here, before anything is decrypted: 0004-the-handover review R2.
+- name: Reach the box
+  hosts: box
+  gather_facts: false
+  tasks:
+    - name: Set the box user's bus
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: user_env.yml
+
 # The box holds public keys only, so the archive is decrypted here: 0004-the-handover design D7.
 # The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age.
 - name: Fetch and decrypt the archive
@@ -33,22 +43,15 @@
     box_zip: "{{ box_config }}/{{ box.name }}/restore.zip"
     box_in_container: /tmp/agent-iac-restore.zip
   tasks:
-    - name: Set the box user's bus
-      ansible.builtin.include_role:
-        name: alxb1t.agent_iac.box
-        tasks_from: user_env.yml
-
     - name: Restore with the service stopped
       become: true
       become_user: "{{ box_user }}"
       environment: "{{ box_user_env }}"
       block:
-        # 0644: the container's user reads it through the bind mount; its folder is 0700.
-        - name: Copy the zip to the box
-          ansible.builtin.copy:
-            src: "{{ box_local }}/restore.zip"
-            dest: "{{ box_zip }}"
-            mode: "0644"
+        - name: Hand the zip to the box
+          ansible.builtin.include_role:
+            name: alxb1t.agent_iac.box
+            tasks_from: send.yml
 
         - name: Stop the box
           ansible.builtin.systemd_service:
@@ -89,13 +92,6 @@
           ansible.builtin.file:
             path: "{{ box_zip }}"
             state: absent
-
-        - name: Remove the decrypted archive
-          ansible.builtin.file:
-            path: "{{ box_local }}"
-            state: absent
-          delegate_to: localhost
-          become: false
 
     - name: Clone the KB from its remote
       ansible.builtin.include_role:

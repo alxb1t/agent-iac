@@ -72,14 +72,14 @@ restore: [hermes, import, --force, "{archive}"]
     podman exec --user 10000 <name> <backup argv, {archive} = <blueprint_mount>/backups/agent-iac.zip>
     podman unshare cat <volume>/backups/agent-iac.zip | age -R <name>.recipients | rclone rcat r2:<bucket>/<name>-<ts>.zip.age
     trap: podman exec --user 10000 <name> rm -f <blueprint_mount>/backups/agent-iac.zip
-  keep five: rclone lsf --files-only --include '<name>-*.zip.age' r2:<bucket> | sort | head -n -5
+  keep five: rclone lsf --files-only --include '<name>-<ts glob>.zip.age' r2:<bucket> | sort | head -n -5
              → rclone deletefile each; a refused delete → logger -p user.warning, carry on
   any other failure → logger -p user.err, exit 1
 ```
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D5 | the script above; `<ts>` is `date -u +%Y%m%dT%H%M%SZ`, so names sort by time; the plaintext zip exists only in the volume, inside `backups/` which `hermes backup` skips, and is removed on every exit | no stop: `hermes backup` copies SQLite safely; no plaintext on the host disk; a dead box deletes nothing | stopping the service (v0.2's way); trimming by a lifecycle rule (it outlives a dead box) |
+| D5 | the script above; `<ts>` is `date -u +%Y%m%dT%H%M%SZ`, so names sort by time; `<ts glob>` is its shape, `[0-9]{8}T[0-9]{6}Z` spelt as a glob, so the listing of `example` never holds `example-two`'s archives, here, in restore, the drill or status; the plaintext zip exists only in the volume, inside `backups/` which `hermes backup` skips, and is removed on every exit | no stop: `hermes backup` copies SQLite safely; no plaintext on the host disk; a dead box deletes nothing | stopping the service (v0.2's way); trimming by a lifecycle rule (it outlives a dead box) |
 
 ### D6 — The lock
 
@@ -91,7 +91,7 @@ restore: [hermes, import, --force, "{archive}"]
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D7 | `restore` and `restore-drill` fetch and decrypt on the machine running `make`, in a `0700` temp folder removed in an `always:`: `rclone` with the R2 secrets as task `environment` (`no_log`), then `age -d -i <identity>`; the identity is `$SOPS_AGE_KEY_FILE`, else `~/Library/Application Support/sops/age/keys.txt`, else `~/.config/sops/age/keys.txt` — the file sops already uses | the box holds public keys only; the client's machine and the operator's both hold one private key | decrypting on the box (a stolen Pi could read every archive) |
+| D7 | `restore` and `restore-drill` first reach the box (an unreachable box stops them before any decrypt), then fetch and decrypt on the machine running `make`, in a `0700` temp folder; the box's first task copies the zip over and removes the folder in an `always:`, the copy ignoring an unreachable box and an `assert` then failing on it, since `always:` never runs for an unreachable host: `rclone` with the R2 secrets as task `environment` (`no_log`), then `age -d -i <identity>`; the identity is `$SOPS_AGE_KEY_FILE`, else `~/Library/Application Support/sops/age/keys.txt`, else `~/.config/sops/age/keys.txt` — the file sops already uses | the box holds public keys only; the client's machine and the operator's both hold one private key | decrypting on the box (a stolen Pi could read every archive) |
 
 ### D8 — Restore
 
@@ -141,7 +141,7 @@ restore: [hermes, import, --force, "{archive}"]
 |---|---|
 | `tests/test_box_schema.py` | an R2 `backup` accepted, a restic URL refused; the R2 names required, `RESTIC_PASSWORD` not; `backup`/`restore` without `{archive}` refused; `read_recipients` on a string, a list, none and a bad key |
 | `tests/test_templates.py` | `rclone.env.j2` needles; `box-backup.sh.j2` with stub `podman`, `age`, `rclone`, `logger`: seven listed archives → the oldest two deleted; a refused delete → a warning and exit `0`; a failed upload → exit non-zero and the in-volume zip removed; no `systemctl … stop` |
-| `tests/test_plays.py` | restore: stop before the import, the import in `podman run --rm --user 10000`, the start in `always:`, `rm -rf` of `kb` only under `box.kb is defined`, `age -d` only in a `localhost` play; drill: the scratch volume removed in `always:`; the KB tests read `roles/box/tasks/kb.yml`, and `box.yml` flushes handlers before importing it |
+| `tests/test_plays.py` | restore: stop before the import, the import in `podman run --rm --user 10000`, the start in `always:`, `rm -rf` of `kb` only under `box.kb is defined`, `age -d` only in a `localhost` play, after a play that reaches the box, and the zip's hand-over first on the box, removing it here in `always:` even from an unreachable box; drill: the scratch volume removed in `always:`; the KB tests read `roles/box/tasks/kb.yml`, and `box.yml` flushes handlers before importing it |
 | `tests/test_bootstrap.py` | no argument → usage and exit `1`; the script never assigns `$1` to the auth key; the keyring `curl` writes to a `mktemp` path |
 | `tests/test_sops.py` | unchanged |
 

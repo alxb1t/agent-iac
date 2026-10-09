@@ -20,6 +20,9 @@ VALID_BOX = {
     "version": "v2026.9.24",
     "backup": "r2:0123456789abcdef0123456789abcdef/example-backups",
 }
+# A week of the example box's nightly archives, unsorted, and those of a box whose name starts with its own.
+ARCHIVES = [f"example-202610{d:02d}T040000Z.zip.age" for d in (3, 1, 7, 2, 5, 4, 6)]
+OTHER_BOX_ARCHIVES = [f"example-two-202610{d:02d}T040000Z.zip.age" for d in range(1, 9)]
 
 
 def jinja_env(**options):

@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from conftest import ROOT, TEMPLATES
+from conftest import ARCHIVES, OTHER_BOX_ARCHIVES, ROOT, TEMPLATES
 
 # The lines each rendered file must hold: 0002-the-box design D14.
 NEEDLES = {
@@ -183,15 +183,15 @@ esac""",
     "rclone": """echo "rclone $*" >> "$LOG"
 case "$1" in
   rcat) cat > "$UPLOAD"; exit "$RCAT_RC";;
-  lsf) printf '%s\\n' $LISTING;;
+  lsf) while [ "$1" != --include ]; do shift; done
+    for f in $LISTING; do case $f in $2) echo "$f";; esac; done;;
   deletefile) exit "$DELETE_RC";;
 esac""",
     "logger": 'echo "logger $*" >> "$LOG"',
 }
-ARCHIVES = [f"example-202610{d:02d}T040000Z.zip.age" for d in (3, 1, 7, 2, 5, 4, 6)]
 
 
-def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text):
+def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text, listing=ARCHIVES):
     """Run box-backup against the stubs; return its exit code, the calls logged and the volume's zip path."""
     bin_dir, data = tmp_path / "bin", tmp_path / "data"
     bin_dir.mkdir()
@@ -208,7 +208,7 @@ def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text)
         "LOG": str(log),
         "DATA": str(data),
         "UPLOAD": str(upload),
-        "LISTING": " ".join(ARCHIVES),
+        "LISTING": " ".join(listing),
         "RCAT_RC": str(rcat_rc),
         "DELETE_RC": str(delete_rc),
     }
@@ -227,13 +227,24 @@ def test_backup_uploads_the_encrypted_archive_and_keeps_five(render, tmp_path):
     assert (tmp_path / "upload").read_text() == "zip\n"
     [rcat] = calls(log, "rclone rcat ")
     assert re.fullmatch(r"rclone rcat r2:example-backups/example-\d{8}T\d{6}Z\.zip\.age", rcat)
-    assert calls(log, "rclone lsf ") == ["rclone lsf --files-only --include example-*.zip.age r2:example-backups"]
+    glob = "example-" + "[0-9]" * 8 + "T" + "[0-9]" * 6 + "Z.zip.age"
+    assert calls(log, "rclone lsf ") == [f"rclone lsf --files-only --include {glob} r2:example-backups"]
     assert sorted(calls(log, "rclone deletefile ")) == [
         "rclone deletefile r2:example-backups/example-20261001T040000Z.zip.age",
         "rclone deletefile r2:example-backups/example-20261002T040000Z.zip.age",
     ]
     assert calls(log, "logger ") == []
     assert not zip_path.exists()
+
+
+# The bucket may hold the archives of a box whose name starts with this one's: 0004-the-handover review R1.
+def test_keep_five_leaves_another_boxs_archives(render, tmp_path):
+    code, log, _ = run_backup(render, tmp_path, listing=OTHER_BOX_ARCHIVES + ARCHIVES)
+    assert code == 0
+    assert sorted(calls(log, "rclone deletefile ")) == [
+        "rclone deletefile r2:example-backups/example-20261001T040000Z.zip.age",
+        "rclone deletefile r2:example-backups/example-20261002T040000Z.zip.age",
+    ]
 
 
 # A locked archive is the lock working, not a failed backup.

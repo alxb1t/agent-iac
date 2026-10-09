@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bootstrap-pi.sh` takes only the operator's SSH public key and reads the Tailscale auth key from the terminal without echo, so the key is on no command line and `curl … | sudo sh -s -- "<key>"` still works. Tailscale's signing key downloads to a temporary file and reaches the keyring path only after its hash checks.
 - The collection is `0.4.0`; the example pins `v0.4.0`, gains `make restore`, backs up to an R2 bucket, and encrypts its secrets to an operator's and a client's throwaway key. `docs/kb.md` says to set the ruleset **Active**. `README.md` and `docs/architecture.md` say eight fields, R2 and the client's key; `CLAUDE.md` says eight fields.
 
+### Fixed
+
+- A box lists its archives as `<name>-<timestamp>.zip.age` with the timestamp's shape spelt out, so the keep-five, `restore`, `restore-drill` and `status` of `example` never touch or pick the archives of a box named `example-two` in the same bucket.
+- `restore` and `restore-drill` reach the box before decrypting, and remove the decrypted archive from the machine running them as soon as it is copied to the box, even when the box drops during the copy.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
