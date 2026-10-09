@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Added
 
 - `box.yaml` takes an optional `kb:`, a GitHub SSH URL; with it, `KB_DEPLOY_KEY` is a required secret, so a KB without its key is refused before any connection.
