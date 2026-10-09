@@ -5,7 +5,7 @@ green gate.
 
 ## Progress
 
-- [ ] 1 — The contracts
+- [x] 1 — The contracts
 - [ ] 2 — The backup
 - [ ] 3 — Restore, the drill and status
 - [ ] 4 — The bootstrap
@@ -13,14 +13,14 @@ green gate.
 
 ## 1 — The contracts
 
-- [ ] 1.1 Edit `plugins/module_utils/box_schema.py` per [D1](design.md#d1)–[D3](design.md#d3): `backup` and `restore`
+- [x] 1.1 Edit `plugins/module_utils/box_schema.py` per [D1](design.md#d1)–[D3](design.md#d3): `backup` and `restore`
       in `MANIFEST_KEYS`, the R2 pattern in place of `RESTIC_URL`, the R2 names in `HOST_SECRETS`, `read_recipients`.
       Verify: `grep -c 'RESTIC' plugins/module_utils/box_schema.py` prints `0` and `grep -c 'def read_recipients' plugins/module_utils/box_schema.py` prints `1`.
-- [ ] 1.2 In `plugins/action/box_load.py`, read `.sops.yaml` beside `box.yaml` through `read_recipients` and pass `box_recipients`, per [D3](design.md#d3).
+- [x] 1.2 In `plugins/action/box_load.py`, read `.sops.yaml` beside `box.yaml` through `read_recipients` and pass `box_recipients`, per [D3](design.md#d3).
       Verify: `grep -c 'box_recipients' plugins/action/box_load.py` prints `1`.
-- [ ] 1.3 Add the `backup` and `restore` lines of [D1](design.md#d1) to `runtimes/hermes.yaml`.
+- [x] 1.3 Add the `backup` and `restore` lines of [D1](design.md#d1) to `runtimes/hermes.yaml`.
       Verify: `grep -c '{archive}' runtimes/hermes.yaml` prints `2`.
-- [ ] 1.4 Edit `tests/test_box_schema.py` per [D15](design.md#d15); in `tests/conftest.py` set `VALID_BOX`'s `backup` to an R2 URL and add the R2 secrets and `box_recipients`.
+- [x] 1.4 Edit `tests/test_box_schema.py` per [D15](design.md#d15); in `tests/conftest.py` set `VALID_BOX`'s `backup` to an R2 URL and add the R2 secrets and `box_recipients`.
       Verify: `uv run pytest -q tests/test_box_schema.py` prints `passed` and no `failed`, and
       `grep -c 'read_recipients' tests/test_box_schema.py` prints a number above `0`.
 

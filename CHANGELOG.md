@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The runtime manifest has eight fields: `backup` and `restore` join it, each a command line holding `{archive}` once, so a runtime declares how it archives and restores itself. `box.yaml`'s `backup` is an R2 bucket, `r2:<account-id>/<bucket>`; the R2 key pair replaces `RESTIC_PASSWORD` among the required secrets.
+- `box_load` reads the age recipients of `.sops.yaml` beside `box.yaml` and refuses a file naming none, so the archives go to the same keys as the secrets.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
