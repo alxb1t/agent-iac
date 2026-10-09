@@ -9,7 +9,7 @@ green gate.
 - [x] 2 — The backup
 - [x] 3 — Restore, the drill and status
 - [x] 4 — The bootstrap
-- [ ] 5 — The example and the docs
+- [x] 5 — The example and the docs
 
 ## 1 — The contracts
 
@@ -58,14 +58,14 @@ green gate.
 
 ## 5 — The example and the docs
 
-- [ ] 5.1 Apply [D14](design.md#d14): `galaxy.yml`, `examples/box/requirements.yml`, `examples/box/Makefile`, `examples/box/box.yaml`,
+- [x] 5.1 Apply [D14](design.md#d14): `galaxy.yml`, `examples/box/requirements.yml`, `examples/box/Makefile`, `examples/box/box.yaml`,
       `tests/keys/example-client.age`, `examples/box/.sops.yaml`, then re-encrypt `examples/box/secrets.sops.yaml` to both keys.
-      Verify: `grep -c '^version: 0.4.0' galaxy.yml` prints `1` and `grep -c '^[A-Z_]*: ENC\[' examples/box/secrets.sops.yaml` prints `10`.
-- [ ] 5.2 Write `examples/box/RESTORE.md` and the `docs/host.md` onboarding per [D13](design.md#d13), and the `docs/kb.md` ruleset line.
+      Verify: `grep -c '^version: 0.4.0' galaxy.yml` prints `1` and `grep -c '^[A-Z0-9_]*: ENC\[' examples/box/secrets.sops.yaml` prints `10`.
+- [x] 5.2 Write `examples/box/RESTORE.md` and the `docs/host.md` onboarding per [D13](design.md#d13), and the `docs/kb.md` ruleset line.
       Verify: `grep -c 'tag:box' docs/host.md` prints a number above `0`, `grep -c 'age -d' examples/box/RESTORE.md` prints a number above `0`,
       and `grep -c 'Active' docs/kb.md` prints a number above `0`.
-- [ ] 5.3 Edit `README.md`, `docs/architecture.md` and `CLAUDE.md` per [D13](design.md#d13).
+- [x] 5.3 Edit `README.md`, `docs/architecture.md` and `CLAUDE.md` per [D13](design.md#d13).
       Verify: `git grep -c -i 'restic\|sftp' -- README.md docs/architecture.md | wc -l` prints `0` and `grep -c 'eight-field manifest' CLAUDE.md` prints `1`.
-- [ ] 5.4 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
+- [x] 5.4 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
       Verify: `git grep --untracked -l '/Users/' -- $P | wc -l` prints `0`, and `test -s .minions/refused-names && { git grep --untracked -li -f .minions/refused-names -- $P; echo "exit=$?"; }`
       prints only `exit=1`; a missing or empty `.minions/refused-names` prints nothing and fails.

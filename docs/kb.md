@@ -22,9 +22,10 @@ A deployment's own `blueprint/config.yaml` or `SOUL.md` replaces the base file w
    makes every ssh of the agent to GitHub, the plugin's pushes included, use them and the deploy key.
 2. Make a key pair for the box alone: `ssh-keygen -t ed25519 -N '' -C example-kb -f kb_deploy`.
 3. In the repo's **Settings → Deploy keys**, add `kb_deploy.pub` and tick **Allow write access**. Then, in
-   **Settings → Rules → Rulesets**, add a branch ruleset on the default branch with **Restrict deletions** and
-   **Block force pushes**: the deploy key cannot bypass it, so an agent steered by a prompt injection cannot erase
-   the KB's history, and the plugin's ordinary pushes still pass. A private repo's rulesets need a paid GitHub plan.
+   **Settings → Rules → Rulesets**, add a branch ruleset on the default branch, set its **Enforcement status** to
+   **Active**, and tick **Restrict deletions** and **Block force pushes**: the deploy key cannot bypass it, so an
+   agent steered by a prompt injection cannot erase the KB's history, and the plugin's ordinary pushes still pass.
+   A private repo's rulesets need a paid GitHub plan.
 4. Run `sops secrets.sops.yaml` and add the private half as a block: a line `KB_DEPLOY_KEY: |`, then every line
    of `kb_deploy`, indented two spaces. Then delete `kb_deploy` and `kb_deploy.pub`.
 5. Add the repo's SSH URL to `box.yaml`: `kb: git@github.com:example/example-kb.git`. On a box that ran without

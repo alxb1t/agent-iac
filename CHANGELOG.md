@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `docs/host.md` opens with the onboarding: the client's R2 bucket, its four-day lock rule and a bucket-scoped token; the client's age key beside the operator's; a `tag:box` auth key and a tailnet policy under which the box reaches nothing; then the node's share and a terminal provider login. `examples/box/RESTORE.md` shows the client `make restore` and the restore by hand with `age -d` and `hermes import`.
+
 ### Changed
 
 - The runtime manifest has eight fields: `backup` and `restore` join it, each a command line holding `{archive}` once, so a runtime declares how it archives and restores itself. `box.yaml`'s `backup` is an R2 bucket, `r2:<account-id>/<bucket>`; the R2 key pair replaces `RESTIC_PASSWORD` among the required secrets.
@@ -16,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `restore` and `restore-drill` fetch and decrypt the archive on the machine running `make`, so the box never holds a private key. `restore` stops the service, imports the archive in a one-off container and starts it again on every exit; with `kb:`, it then clones the KB afresh through the role's new `kb.yml`. `-e box_archive=<file>` picks an archive.
 - `restore-drill` imports into a scratch volume and checks `state.db`'s integrity, its `sessions` table and `config.yaml`, printing the session count, instead of diffing against a live state that has moved on. `status`'s third line names the newest archive.
 - `bootstrap-pi.sh` takes only the operator's SSH public key and reads the Tailscale auth key from the terminal without echo, so the key is on no command line and `curl … | sudo sh -s -- "<key>"` still works. Tailscale's signing key downloads to a temporary file and reaches the keyring path only after its hash checks.
+- The collection is `0.4.0`; the example pins `v0.4.0`, gains `make restore`, backs up to an R2 bucket, and encrypts its secrets to an operator's and a client's throwaway key. `docs/kb.md` says to set the ruleset **Active**. `README.md` and `docs/architecture.md` say eight fields, R2 and the client's key; `CLAUDE.md` says eight fields.
 
 ## [0.3.0] - 2026-10-09
 

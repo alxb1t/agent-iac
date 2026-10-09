@@ -1,5 +1,6 @@
 ---
-# The throwaway key from tests/keys/example.age; a real deployment puts its own age public key here.
+# The throwaway keys: tests/keys/example.age is the operator's, tests/keys/example-client.age the client's.
+# A real deployment puts the operator's and the client's age public keys here; the archives go to the same keys.
 creation_rules:
   - path_regex: secrets\.sops\.yaml$
-    age: age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q
+    age: age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q,age1gtk6slhp0kta8zqr6eunrdxlmqlzy9y82ql2k527ekfm2zytg93s9rvedc
