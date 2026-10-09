@@ -71,5 +71,5 @@ base blueprint, the example and the docs. Each ends on a green gate.
       Verify: `grep -c 'four-field' CLAUDE.md docs/architecture.md | grep -c ':0$'` prints `2`,
       `grep -c 'six-field manifest' CLAUDE.md` prints `1` and `grep -c 'docs/kb.md' README.md` prints `1`.
 - [x] 5.4 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
-      Verify: `grep -rl '/Users/' $P | wc -l` prints `0`, and `test -s .minions/refused-names && { grep -rli -f .minions/refused-names $P; echo "exit=$?"; }`
+      Verify: `git grep -l '/Users/' -- $P | wc -l` prints `0`, and `test -s .minions/refused-names && { git grep -li -f .minions/refused-names -- $P; echo "exit=$?"; }`
       prints only `exit=1`; a missing or empty `.minions/refused-names` prints nothing and fails.

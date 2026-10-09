@@ -12,16 +12,24 @@ The box clones the KB once, at the first `make apply` with `kb:` set; it never p
 `git-hook` plugin pulls before the agent reads and pushes the files each turn changed, under the box's name: for the
 box `example`, `example <example@box.invalid>`. Where the KB sits among the repos: [architecture](architecture.md).
 
+A deployment's own `blueprint/config.yaml` or `SOUL.md` replaces the base file whole: keep `git-hook` in
+`plugins.enabled`, or the KB is never pushed, and keep the base `SOUL.md`'s paragraph naming `/opt/data/kb`.
+
 ## 1 — The operator: the KB repo and its deploy key
 
 1. Make a **private** GitHub repo for the client's KB, e.g. `example/example-kb`. GitHub is the only host the box
    trusts: its host keys are pinned in `blueprints/base/.ssh/kb_known_hosts`, and `blueprints/base/.ssh/config`
    makes every ssh of the agent to GitHub, the plugin's pushes included, use them and the deploy key.
 2. Make a key pair for the box alone: `ssh-keygen -t ed25519 -N '' -C example-kb -f kb_deploy`.
-3. In the repo's **Settings → Deploy keys**, add `kb_deploy.pub` and tick **Allow write access**.
+3. In the repo's **Settings → Deploy keys**, add `kb_deploy.pub` and tick **Allow write access**. Then, in
+   **Settings → Rules → Rulesets**, add a branch ruleset on the default branch with **Restrict deletions** and
+   **Block force pushes**: the deploy key cannot bypass it, so an agent steered by a prompt injection cannot erase
+   the KB's history, and the plugin's ordinary pushes still pass. A private repo's rulesets need a paid GitHub plan.
 4. Run `sops secrets.sops.yaml` and add the private half as a block: a line `KB_DEPLOY_KEY: |`, then every line
    of `kb_deploy`, indented two spaces. Then delete `kb_deploy` and `kb_deploy.pub`.
-5. Add the repo's SSH URL to `box.yaml`: `kb: git@github.com:example/example-kb.git`.
+5. Add the repo's SSH URL to `box.yaml`: `kb: git@github.com:example/example-kb.git`. On a box that ran without
+   `kb:`, the agent may already have written `/opt/data/kb`; git clones only into an empty folder, so move it aside
+   first: `podman exec example mv /opt/data/kb /opt/data/kb.old`, as the box user.
 6. Run `make apply`. It stores the key as a Podman secret of the box user, restarts a running box so the key is
    mounted, and clones the KB into `/opt/data/kb`.
 
