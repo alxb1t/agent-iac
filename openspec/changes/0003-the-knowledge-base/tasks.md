@@ -7,7 +7,7 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 - [x] 1 — The contracts
 - [x] 2 — The quadlet and the tailnet address
-- [ ] 3 — The deploy key and the clone
+- [x] 3 — The deploy key and the clone
 - [ ] 4 — The plugin and the base blueprint
 - [ ] 5 — The example and the docs
 
@@ -39,11 +39,11 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## 3 — The deploy key and the clone
 
-- [ ] 3.1 Add the Podman secret tasks of [D4](design.md#d4) to `roles/box/tasks/box.yml`, before `Write the quadlet`,
+- [x] 3.1 Add the Podman secret tasks of [D4](design.md#d4) to `roles/box/tasks/box.yml`, before `Write the quadlet`,
       only when `box.kb is defined`. Verify: `grep -c 'podman secret create --replace' roles/box/tasks/box.yml` prints `1`.
-- [ ] 3.2 Add the guarded clone of [D7](design.md#d7) to `roles/box/tasks/box.yml`, after `Start the service`.
+- [x] 3.2 Add the guarded clone of [D7](design.md#d7) to `roles/box/tasks/box.yml`, after `Start the service`.
       Verify: `grep -c 'git clone' roles/box/tasks/box.yml` prints `1`.
-- [ ] 3.3 Extend `tests/test_plays.py` per [D10](design.md#d10): the secret task's `no_log` and `stdin`, the clone's guard and user.
+- [x] 3.3 Extend `tests/test_plays.py` per [D10](design.md#d10): the secret task's `no_log` and `stdin`, the clone's guard and user.
       Verify: `uv run pytest -q tests/test_plays.py` prints `passed` and no `failed`, and
       `grep -c 'git clone' tests/test_plays.py` prints a number above `0`.
 
