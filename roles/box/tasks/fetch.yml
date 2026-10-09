@@ -7,16 +7,17 @@
       - "{{ lookup('ansible.builtin.env', 'HOME') }}/Library/Application Support/sops/age/keys.txt"
       - "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/sops/age/keys.txt"
   block:
-    # The file sops already decrypts the secrets with.
+    # The file sops already decrypts the secrets with; first_found gives None when there is none.
     - name: Find the age identity
       ansible.builtin.set_fact:
         box_identity: >-
           {{ (lookup('ansible.builtin.env', 'SOPS_AGE_KEY_FILE')
-              or lookup('ansible.builtin.first_found', box_identities, errors='ignore')) | trim }}
+              or lookup('ansible.builtin.first_found', box_identities, errors='ignore')
+              or '') | trim }}
 
     - name: Stop without an age identity
       ansible.builtin.assert:
-        that: box_identity | length > 0
+        that: box_identity | length > 0 and box_identity is file
         fail_msg: no age identity; set SOPS_AGE_KEY_FILE or put the key in ~/.config/sops/age/keys.txt
         quiet: true
 
@@ -46,6 +47,20 @@
         that: box_pick | length > 0
         fail_msg: "r2:{{ box_r2_bucket }} holds no archive of {{ box.name }}"
         quiet: true
+
+    # The box's token can upload, so a compromised box can plant a name that sorts after every nightly one.
+    # Why: 0004-the-handover design D7.
+    - name: Stop on an archive dated in the future
+      ansible.builtin.assert:
+        that: box_archive is defined or box_pick <= box.name ~ '-' ~ now(utc=true, fmt='%Y%m%dT%H%M%SZ') ~ '.zip.age'
+        fail_msg: >-
+          {{ box_pick }} is dated in the future, so no nightly run wrote it: rotate the R2 token, then name an archive
+          from before the box was compromised with -e box_archive=<name>
+        quiet: true
+
+    - name: Name the archive
+      ansible.builtin.debug:
+        msg: "archive: {{ box_pick }}"
 
     - name: Download the archive
       ansible.builtin.command:

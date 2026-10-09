@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A box lists its archives as `<name>-<timestamp>.zip.age` with the timestamp's shape spelt out, so the keep-five, `restore`, `restore-drill` and `status` of `example` never touch or pick the archives of a box named `example-two` in the same bucket.
 - `restore` and `restore-drill` reach the box before decrypting, and remove the decrypted archive from the machine running them as soon as it is copied to the box, even when the box drops during the copy.
+- `restore` and `restore-drill` stop with "no age identity" when neither `SOPS_AGE_KEY_FILE` nor sops' default key file exists, instead of failing later at the decrypt.
+- `restore` and `restore-drill` name the archive they picked, and stop on a newest archive dated in the future, which a compromised box could have planted; `RESTORE.md` and `docs/host.md` say to rotate the R2 token and name an archive from before the compromise.
+- `box_load` refuses a box not named `example` whose `.sops.yaml` keeps a throwaway key of `tests/keys/`, whose private half is public, so a copied example never encrypts secrets and archives to it.
+- `box-backup` logs an error when the rclone env file is missing or unreadable, instead of exiting with no line in the system log.
+- `apply` removes the SFTP key, the ssh `config` and the `known_hosts` that v0.3's backup left in the box user's `~/.ssh`. On upgrading a v0.3 box, also remove its key, `<name>-backup`, from the old backup host's `authorized_keys`.
+- The onboarding's tailnet policy admits the client the node is shared with, `autogroup:shared`, to the box's dashboard and SSH; the hand-over adds the client's SSH public key to root's, so the client can run `make restore` alone, as `RESTORE.md` says.
+- `docs/kb.md` says `make restore` clones the KB afresh, so unpushed KB files are not restored; `docs/architecture.md` says the restore drill gates the acceptance by hand, not a release; the `box-backup` spec's purpose names the encrypted archive, not a snapshot.
 
 ## [0.3.0] - 2026-10-09
 

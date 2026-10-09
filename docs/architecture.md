@@ -126,8 +126,8 @@ This section decides how a secret reaches the box, and how a backup is proven.
 - A restore is one step, from the operator's or the client's machine: fetch, decrypt there, stop, import with the
   manifest's `restore`, start. By hand, it is `age -d` and `hermes import`: the example's
   [RESTORE.md](../examples/box/RESTORE.md).
-- A **restore drill** imports the newest archive into a scratch volume and checks its database. It is a release
-  gate of every change that touches backup.
+- A **restore drill** imports the newest archive into a scratch volume and checks its database. It needs a box and
+  a bucket, so it gates the acceptance by hand, not a release: v0.4.0 rewrote the backup and shipped without one.
 
 ## The tiers
 

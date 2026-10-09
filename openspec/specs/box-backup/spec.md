@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The nightly snapshot of the agent's state, the one-step restore that brings a box back, the drill that proves it,
+The nightly encrypted archive of the agent's state, the one-step restore that brings a box back, the drill that proves it,
 and the status line.
 
 ## Requirements

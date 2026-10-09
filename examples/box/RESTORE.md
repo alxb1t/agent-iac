@@ -10,7 +10,9 @@ five.
 
 ## With this repo: `make restore`
 
-On a machine that reaches the box as root over SSH, with `ansible-core`, `sops`, `age` and `rclone` installed:
+On a machine that reaches the box as root over SSH, with `ansible-core`, `sops`, `age` and `rclone` installed. The
+operator's machine does; the client's does once the operator has added the client's SSH public key at the hand-over,
+or once the client has bootstrapped a re-flashed Pi with their own key.
 
 1. Point `SOPS_AGE_KEY_FILE` at your age key file, e.g. `export SOPS_AGE_KEY_FILE=$HOME/client.age`, or put the key
    where sops looks by default. The same key decrypts `secrets.sops.yaml`.
@@ -23,6 +25,10 @@ On a machine that reaches the box as root over SSH, with `ansible-core`, `sops`,
 ```sh
 ansible-playbook alxb1t.agent_iac.restore -e box_file=$PWD/box.yaml -e box_archive=example-20261001T040000Z.zip.age
 ```
+
+`make restore` names the archive it picked before it downloads it, and stops on a newest archive dated in the
+future: no nightly run wrote it, so the box that uploaded it was compromised. Rotate the R2 token, then name an
+archive from before the compromise, as above.
 
 ## By hand: the dashboard, `age` and `hermes`
 

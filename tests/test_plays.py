@@ -1,10 +1,15 @@
 """The playbooks and the role's tasks, read as YAML: the commands that can lose state or wedge an apply."""
 
 import fnmatch
+import json
+import os
 import shlex
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 import yaml
@@ -123,6 +128,104 @@ def test_restore_drill_and_status_list_only_this_boxs_archives(sample_vars):
     assert sorted(listed)[-1] == "example-20261007T040000Z.zip.age"
     assert "{{ box_archives_glob }}" in argv(task(FETCH, "List the archives"))
     assert "--include '{{ box_archives_glob }}'" in argv(task("playbooks/status.yml", "List the archives"))[-1]
+
+
+# rclone lists $LISTING and downloads a stand-in; age, like age, needs its identity file. Each logs to $LOG.
+FETCH_STUBS = {
+    "rclone": """echo "rclone $*" >> "$LOG"
+case "$1" in
+  lsf) for f in $LISTING; do echo "$f"; done;;
+  copyto) echo archive > "$3";;
+esac""",
+    # age -d -i <identity> -o <out> <in>
+    "age": """echo "age $*" >> "$LOG"
+[ -f "$3" ] || { echo "age: no identity file $3" >&2; exit 1; }
+cp "$6" "$5"
+""",
+}
+
+
+@pytest.fixture
+def short_tmp():
+    """A temp folder with a short path: ansible-playbook's RPC socket lives in TMPDIR, and a socket path is short."""
+    path = Path(tempfile.mkdtemp(prefix="aiac-", dir="/tmp"))
+    yield path
+    shutil.rmtree(path)
+
+
+def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True):
+    """Run fetch.yml on this machine against the stubs; return ansible-playbook's exit code, its output, the calls."""
+    bin_dir, home, log = tmp_path / "bin", tmp_path / "home", tmp_path / "log"
+    for d in (bin_dir, home):
+        d.mkdir()
+    for name, body in FETCH_STUBS.items():
+        (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    log.write_text("")
+    (tmp_path / "vars.json").write_text(json.dumps(sample_vars))
+    play = [{"hosts": "localhost", "gather_facts": False, "tasks": [{"ansible.builtin.import_tasks": str(ROOT / FETCH)}]}]
+    (tmp_path / "fetch.yml").write_text(yaml.safe_dump(play))
+    env = {k: v for k, v in os.environ.items() if k != "SOPS_AGE_KEY_FILE"}
+    env.update(PATH=f"{bin_dir}:{env['PATH']}", HOME=str(home), TMPDIR=str(short_tmp), LOG=str(log))
+    env.update(LISTING=" ".join(listing), ANSIBLE_NOCOLOR="1", ANSIBLE_NOCOWS="1")
+    if identity:
+        (tmp_path / "key.txt").write_text("AGE-SECRET-KEY-EXAMPLE\n")
+        env["SOPS_AGE_KEY_FILE"] = str(tmp_path / "key.txt")
+    playbook = Path(sys.executable).parent / "ansible-playbook"
+    argv = [playbook, "-i", "localhost,", "-c", "local", "-e", f"ansible_python_interpreter={sys.executable}"]
+    argv += ["-e", f"@{tmp_path / 'vars.json'}", tmp_path / "fetch.yml"]
+    done = subprocess.run(argv, env=env, capture_output=True, text=True, check=False)
+    return done.returncode, done.stdout + done.stderr, log.read_text().splitlines()
+
+
+def test_fetch_names_and_decrypts_the_newest_archive(sample_vars, tmp_path, short_tmp):
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp)
+    assert code == 0, out
+    assert "archive: example-20261007T040000Z.zip.age" in out
+    [age] = [line for line in log if line.startswith("age ")]
+    assert age.endswith("/example-20261007T040000Z.zip.age")
+
+
+# No SOPS_AGE_KEY_FILE and no key where sops looks: the run says so, not "decrypt failed": 0004-the-handover review R3.
+def test_fetch_without_an_age_identity_stops_before_the_download(sample_vars, tmp_path, short_tmp):
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, identity=False)
+    assert code != 0
+    assert "Stop without an age identity failed; the box was not touched" in out
+    assert log == []
+
+
+# A compromised box can upload a name that sorts after every nightly one: 0004-the-handover security S3.
+def test_fetch_refuses_an_archive_dated_in_the_future(sample_vars, tmp_path, short_tmp):
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, listing=[*ARCHIVES, "example-99991231T000000Z.zip.age"])
+    assert code != 0
+    assert "example-99991231T000000Z.zip.age is dated in the future" in out
+    assert [line for line in log if not line.startswith("rclone lsf ")] == []
+
+
+# The files the v0.3 backup wrote for its SFTP host: 0002-the-box design D11 and D12; 0004-the-handover review R10.
+V03_BACKUP_FILES = {
+    "/home/box/.config/agent-iac/example.restic.env",
+    "/home/box/.ssh/id_ed25519",
+    "/home/box/.ssh/id_ed25519.pub",
+    "/home/box/.ssh/config",
+    "/home/box/.ssh/known_hosts",
+}
+
+
+def removed_paths(path, sample_vars):
+    """Return the paths a task file sets absent, each loop item rendered, e.g. a loop over [a, b] → {.../a, .../b}."""
+    env, paths = jinja_env(), set()
+    for t in tasks(path):
+        f = t.get("ansible.builtin.file", {})
+        if f.get("state") == "absent":
+            for item in t.get("loop", [None]):
+                paths.add(env.from_string(f["path"]).render({**sample_vars, "item": item}))
+    return paths
+
+
+# An upgraded v0.3 box keeps no key its old backup host still accepts.
+def test_apply_removes_what_the_v03_backup_left(sample_vars):
+    assert removed_paths("roles/box/tasks/backup.yml", sample_vars) >= V03_BACKUP_FILES
 
 
 SEND = "roles/box/tasks/send.yml"

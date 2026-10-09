@@ -191,18 +191,19 @@ esac""",
 }
 
 
-def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text, listing=ARCHIVES):
+def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text, listing=ARCHIVES, rclone_env=True):
     """Run box-backup against the stubs; return its exit code, the calls logged and the volume's zip path."""
     bin_dir, data = tmp_path / "bin", tmp_path / "data"
     bin_dir.mkdir()
     data.mkdir()
     for name, body in BACKUP_STUBS.items():
         stub(bin_dir, name, body)
-    rclone_env, log, upload = tmp_path / "example.rclone.env", tmp_path / "log", tmp_path / "upload"
-    rclone_env.write_text("")
+    env_file, log, upload = tmp_path / "example.rclone.env", tmp_path / "log", tmp_path / "upload"
+    if rclone_env:
+        env_file.write_text("")
     log.write_text("")
     script = tmp_path / "box-backup"
-    script.write_text(edit(render("box-backup.sh.j2", box_rclone_env=str(rclone_env))))
+    script.write_text(edit(render("box-backup.sh.j2", box_rclone_env=str(env_file))))
     env = {
         "PATH": f"{bin_dir}:/usr/bin:/bin",
         "LOG": str(log),
@@ -261,6 +262,15 @@ def test_a_failed_upload_fails_logs_and_removes_the_zip(render, tmp_path):
     assert len(calls(log, "logger -p user.err ")) == 1
     assert calls(log, "rclone deletefile ") == []
     assert not zip_path.exists()
+
+
+# An env file removed or no longer readable by hand still leaves its line in the log: 0004-the-handover review R9.
+def test_a_missing_rclone_env_fails_and_logs(render, tmp_path):
+    code, log, _ = run_backup(render, tmp_path, rclone_env=False)
+    assert code != 0
+    [err] = calls(log, "logger -p user.err ")
+    assert "no rclone env" in err
+    assert calls(log, "podman ") == [] and calls(log, "rclone ") == []
 
 
 def test_zip_check_catches_a_dropped_trap(render, tmp_path):

@@ -30,11 +30,15 @@ placeholder `{archive}` exactly once.
 ### Requirement: The backup recipients are the secrets' recipients
 `apply` SHALL read the age recipients from the first creation rule of `.sops.yaml` beside `box.yaml`, and SHALL
 encrypt every archive to each of them. There SHALL be at least one, each an age public key; a client's box carries
-the client's and the operator's.
+the client's and the operator's. A box not named `example` SHALL NOT name a throwaway key of `tests/keys/`.
 
 #### Scenario: Two recipients
 - **WHEN** `.sops.yaml` lists the operator's and the client's age public keys
 - **THEN** every archive of the box decrypts with either private key alone
+
+#### Scenario: A copied throwaway key stops apply
+- **WHEN** a box not named `example` lists in `.sops.yaml` a public key of `tests/keys/`
+- **THEN** `apply` stops before touching the host, naming the key and `.sops.yaml`
 
 #### Scenario: No recipient stops apply
 - **WHEN** `.sops.yaml` has no `age` recipient

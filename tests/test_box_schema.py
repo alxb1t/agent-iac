@@ -8,10 +8,11 @@ from box_schema import (
     known_runtimes,
     missing_secrets,
     read_recipients,
+    throwaway_recipients,
     validate_box,
     validate_manifest,
 )
-from conftest import EXAMPLE_RECIPIENT, VALID_BOX
+from conftest import EXAMPLE_RECIPIENT, ROOT, VALID_BOX
 
 
 def test_valid_box_is_accepted():
@@ -224,3 +225,24 @@ def test_no_recipient_is_refused(config):
 def test_a_bad_recipient_is_named(bad):
     keys, errors = read_recipients(_sops_config([EXAMPLE_RECIPIENT, bad]))
     assert errors == [f".sops.yaml: {bad!r} is not an age public key"]
+
+
+def throwaway_keys():
+    """Return the public halves of tests/keys/*.age, read from each file's `# public key:` line."""
+    lines = [line for p in sorted((ROOT / "tests" / "keys").glob("*.age")) for line in p.read_text().splitlines()]
+    return [line.split(": ", 1)[1] for line in lines if line.startswith("# public key: ")]
+
+
+# A deployment copied from the example, its own key swapped in beside the client's throwaway one: 0004 security S4.
+def test_a_copied_box_refuses_the_committed_throwaway_keys():
+    keys = throwaway_keys()
+    assert len(keys) == 2
+    assert throwaway_recipients([OTHER_RECIPIENT, keys[0]], "example-two") == [
+        f".sops.yaml: {keys[0]} is a throwaway key whose private half is in this repo; replace it with your own"
+    ]
+    assert len(throwaway_recipients([OTHER_RECIPIENT, *keys], "example-two")) == 2
+
+
+def test_the_example_box_keeps_its_throwaway_keys():
+    assert throwaway_recipients(throwaway_keys(), "example") == []
+    assert throwaway_recipients([OTHER_RECIPIENT], "example-two") == []

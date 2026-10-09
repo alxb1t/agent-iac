@@ -23,6 +23,13 @@
     path: "{{ box_config }}/{{ box.name }}.restic.env"
     state: absent
 
+# v0.3's backup host may still accept that key, and the box never reaches back.
+- name: Remove the SFTP key and ssh config of the old backup
+  ansible.builtin.file:
+    path: "{{ box_home }}/.ssh/{{ item }}"
+    state: absent
+  loop: [id_ed25519, id_ed25519.pub, config, known_hosts]
+
 - name: Install the backup script
   ansible.builtin.template:
     src: box-backup.sh.j2

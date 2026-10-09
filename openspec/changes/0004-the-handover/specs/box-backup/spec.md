@@ -59,7 +59,9 @@ live volume, and SHALL remove the scratch volume and every decrypted copy at the
 `restore` SHALL fetch the newest archive (or a named one), decrypt it on the machine running it, stop the service,
 import it into the state volume with the manifest's `restore` command, and start the service. When `box.yaml` sets
 `kb`, it SHALL then replace `kb` under the blueprint mount with a fresh clone. No other step SHALL be needed for the
-agent to resume with its previous state. The decrypted archive SHALL be removed from both machines at the end.
+agent to resume with its previous state. The decrypted archive SHALL be removed from both machines at the end. It
+SHALL print the archive's name before the download, and SHALL stop when the newest archive is dated after the time
+of the machine running it, unless the archive is named.
 
 #### Scenario: A fresh box resumes after restore
 - **WHEN** `apply` has run on a fresh host and `restore` is run against the same bucket
@@ -72,6 +74,10 @@ agent to resume with its previous state. The decrypted archive SHALL be removed 
 #### Scenario: An unreachable box leaves no decrypted copy
 - **WHEN** `restore` runs while the box is off the network, or the box drops during the copy of the zip
 - **THEN** it fails before decrypting, or removes the decrypted archive from the machine running it
+
+#### Scenario: A planted archive is refused
+- **WHEN** a compromised box has uploaded `<name>-99991231T000000Z.zip.age` and `restore` runs without naming one
+- **THEN** it stops before the download, naming that archive, and the box is not touched
 
 #### Scenario: The client restores alone
 - **WHEN** the client runs `make restore` from their deployment repo with their own age key

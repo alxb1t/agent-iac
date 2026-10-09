@@ -23,6 +23,12 @@ ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 R2_URL = re.compile(r"^r2:[0-9a-f]{32}/[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
 AGE_RECIPIENT = re.compile(r"^age1[0-9a-z]{58}$")
 ARCHIVE = "{archive}"
+# The public halves of tests/keys/*.age, whose private halves are committed: only the example box may use them.
+THROWAWAY_RECIPIENTS = (
+    "age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q",
+    "age1gtk6slhp0kta8zqr6eunrdxlmqlzy9y82ql2k527ekfm2zytg93s9rvedc",
+)
+EXAMPLE_BOX = "example"
 # GitHub only: its host keys are the ones the base blueprint pins (0003-the-knowledge-base design D3).
 KB_URL = re.compile(r"^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$")
 
@@ -142,3 +148,17 @@ def read_recipients(sops_config: object) -> tuple[list[str], list[str]]:
         return [], [".sops.yaml: the first creation rule names no age recipient"]
     good = [k for k in keys if isinstance(k, str) and AGE_RECIPIENT.fullmatch(k)]
     return good, [f".sops.yaml: {k!r} is not an age public key" for k in keys if k not in good]
+
+
+def throwaway_recipients(recipients: list[str], name: str) -> list[str]:
+    """Return an error per recipient whose private half this repo publishes, unless the box is the example.
+
+    e.g. (["age1nhgsk…"], "example-two") → [".sops.yaml: age1nhgsk… is a throwaway key …"]
+    """
+    if name == EXAMPLE_BOX:
+        return []
+    return [
+        f".sops.yaml: {k} is a throwaway key whose private half is in this repo; replace it with your own"
+        for k in recipients
+        if k in THROWAWAY_RECIPIENTS
+    ]

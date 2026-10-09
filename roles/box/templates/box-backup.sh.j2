@@ -10,8 +10,10 @@ set -euo pipefail
 job=$(cat <<'BOX'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
-set -a; . {{ box_rclone_env }}; set +a
 fail() { logger -p user.err -t box-backup "{{ box.name }}: $1"; exit 1; }
+# Checked first: a shell may exit on a source it cannot read, before any fail.
+[ -r {{ box_rclone_env }} ] || fail "no rclone env {{ box_rclone_env }}"
+set -a; . {{ box_rclone_env }}; set +a
 # The plaintext zip lives only in the volume, and only until the script exits.
 trap 'podman exec --user 10000 {{ box.name }} rm -f {{ zip }} || true' EXIT
 

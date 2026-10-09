@@ -19,7 +19,8 @@ The client owns the bucket and holds a key to every archive; the operator holds 
 1. In R2, create a bucket, e.g. `example-backups`.
 2. In the bucket's settings, add one **bucket lock rule**: no prefix, **4 days**. The box cannot delete or overwrite
    an archive younger than that, so the newest four nights survive a compromised box. A longer lock would refuse
-   every delete the box makes to keep its newest five.
+   every delete the box makes to keep its newest five. A compromised box can still upload an archive of its own:
+   after one, rotate the token, then restore an archive from before it by name, `-e box_archive=<name>`.
 3. Create an R2 API token with **Object Read & Write**, scoped to that bucket alone. It cannot edit the bucket's
    settings, so the box cannot lift the lock. It is a key pair: an access key id and a secret.
 4. In the deployment repo, set `box.yaml`'s `backup` to `r2:<account id>/<bucket>`, e.g.
@@ -40,11 +41,12 @@ The client owns the bucket and holds a key to every archive; the operator holds 
 1. In **Access controls**, set the policy to:
 
    ```json
-   {"tagOwners": {"tag:box": ["autogroup:admin"]}, "acls": [{"action": "accept", "src": ["autogroup:member"], "dst": ["*:*"]}]}
+   {"tagOwners": {"tag:box": ["autogroup:admin"]}, "acls": [{"action": "accept", "src": ["autogroup:member"], "dst": ["*:*"]}, {"action": "accept", "src": ["autogroup:shared"], "dst": ["tag:box:22,9119"]}]}
    ```
 
    A `tag:box` node is no member, so it reaches nothing on the tailnet; the operator's own devices are members and
-   reach it. The policy replaces the tailnet's default, which lets every node reach every other.
+   reach it. The client, once the node is shared with them, is in `autogroup:shared`, not a member, and reaches the
+   box's dashboard and SSH only. The policy replaces the tailnet's default, which lets every node reach every other.
 2. In **Settings → Keys**, generate an auth key: tagged `tag:box`, single use, pre-approved.
 
 **The knowledge base**, with `kb:` only: section 1 of [knowledge base](kb.md).
@@ -94,8 +96,11 @@ That tailnet name is the `target` in `box.yaml`. The host exists; the holder is 
 
 1. In the Tailscale admin console, open the node's menu, choose **Share**, and share it with the client's email.
    The client's devices then reach the dashboard on `<target>:9119`: section 3 of [knowledge base](kb.md).
-2. Run `make apply`.
-3. A model provider that logs in at a terminal, not by an API key in the secrets, logs in on the box as the box
+2. For the client to run `make restore` without the operator, add the client's SSH public key to root's keys:
+   `ssh root@<target> 'cat >> /root/.ssh/authorized_keys' < client.pub`. A Pi re-flashed later takes the client's
+   key in place of the operator's in the bootstrap of section 4.
+3. Run `make apply`.
+4. A model provider that logs in at a terminal, not by an API key in the secrets, logs in on the box as the box
    user:
 
    ```sh
