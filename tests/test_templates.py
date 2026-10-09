@@ -1,11 +1,12 @@
 """Every template renders with the sample vars, and each carries the lines its file must hold."""
 
+import re
 import shlex
 import subprocess
 
 import pytest
 
-from conftest import TEMPLATES
+from conftest import ROOT, TEMPLATES
 
 # The lines each rendered file must hold: 0002-the-box design D14.
 NEEDLES = {
@@ -19,6 +20,9 @@ NEEDLES = {
         "Exec=gateway run",
         "AutoUpdate=none",
         "Restart=always",
+        'Environment="HERMES_DASHBOARD=1"',
+        'Environment="GIT_HOOK_ROOTS=/opt/data/kb"',
+        "PublishPort=100.64.0.1:9119:9119",
     ],
     "restic.env.j2": ["RESTIC_REPOSITORY=", "RESTIC_PASSWORD="],
     "box-blueprint-sync.sh.j2": ["rsync -a --omit-dir-times --checksum --itemize-changes", "chown -R 10000:10000"],
@@ -62,8 +66,78 @@ def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
     assert "RESTIC_PASSWORD='a b'\"'\"'c'" in render("restic.env.j2", box_secrets=secrets)
 
 
-def test_quadlet_publishes_no_port(render):
-    assert "PublishPort" not in render("box.container.j2")
+def off_tailnet_ports(text, ip):
+    """Return the PublishPort= lines not bound to ip, e.g. "PublishPort=9119:9119" → that line."""
+    lines = [line for line in text.splitlines() if line.startswith("PublishPort=")]
+    return [line for line in lines if not line.startswith(f"PublishPort={ip}:")]
+
+
+def test_quadlet_publishes_only_on_the_tailnet_address(render, sample_vars):
+    text = render("box.container.j2")
+    assert "PublishPort=" in text
+    assert off_tailnet_ports(text, sample_vars["box_tailnet_ip"]) == []
+
+
+def test_tailnet_check_catches_a_port_on_every_address(render, sample_vars):
+    text = render("box.container.j2") + "PublishPort=9119:9119\n"
+    assert off_tailnet_ports(text, sample_vars["box_tailnet_ip"]) == ["PublishPort=9119:9119"]
+
+
+KB = "git@github.com:example/example-kb.git"
+KB_LINES = [
+    "Secret=example-kb-deploy-key,type=mount,target=/run/secrets/kb_deploy_key,uid=10000,gid=10000,mode=0400",
+    "StrictHostKeyChecking=yes",
+    "UserKnownHostsFile=/opt/data/.ssh/kb_known_hosts",
+    'Environment="GIT_AUTHOR_EMAIL=example@box.invalid"',
+    'Environment="GIT_COMMITTER_EMAIL=example@box.invalid"',
+]
+
+
+def test_quadlet_with_kb_mounts_the_key_and_names_the_box(render, sample_vars):
+    text = render("box.container.j2", box={**sample_vars["box"], "kb": KB})
+    assert missing(text, KB_LINES) == []
+    assert "KB_DEPLOY_KEY" not in text
+
+
+def test_quadlet_without_kb_has_no_kb_line(render):
+    text = render("box.container.j2")
+    assert missing(text, KB_LINES) == KB_LINES
+    assert "GIT_SSH_COMMAND" not in text
+
+
+def github_ssh_options(text):
+    """Return the options under `Host github.com`, names lowercased, e.g. "IdentitiesOnly yes" → {"identitiesonly": "yes"}."""
+    options, host = {}, None
+    for line in text.splitlines():
+        words = line.split("#", 1)[0].replace("=", " ").split()
+        if len(words) == 2 and words[0].lower() == "host":
+            host = words[1]
+        elif len(words) == 2 and host == "github.com":
+            options[words[0].lower()] = words[1]
+    return options
+
+
+# git-hook runs ssh with its own GIT_SSH_COMMAND, so the key and the pin sit where every ssh of the agent's user
+# reads them: the agent's ~/.ssh/config, its home being the blueprint mount. Why: 0003-the-knowledge-base design D5.
+def test_the_agents_ssh_config_pins_github_to_the_quadlets_key(render, sample_vars):
+    mount = sample_vars["manifest"]["blueprint_mount"]
+    quadlet = render("box.container.j2", box={**sample_vars["box"], "kb": KB})
+    key = re.search(r"^Secret=[^,]+,type=mount,target=([^,]+),", quadlet, re.M)[1]
+    known_hosts = re.search(r"UserKnownHostsFile=(\S+)\"$", quadlet, re.M)[1]
+    ssh = ROOT / "blueprints" / "base" / ".ssh"
+    assert github_ssh_options((ssh / "config").read_text()) == {
+        "identityfile": key,
+        "identitiesonly": "yes",
+        "stricthostkeychecking": "yes",
+        "userknownhostsfile": known_hosts,
+        "globalknownhostsfile": "/dev/null",
+    }
+    assert known_hosts == f"{mount}/.ssh/kb_known_hosts" and (ssh / "kb_known_hosts").is_file()
+
+
+def test_ssh_options_read_only_the_github_host():
+    text = "Host example\n  IdentityFile /a\nHost github.com\n  # a note\n  StrictHostKeyChecking=yes\n"
+    assert github_ssh_options(text) == {"stricthostkeychecking": "yes"}
 
 
 # A source ending in "/" carries its own mode and time onto the volume root, which the agent writes into.

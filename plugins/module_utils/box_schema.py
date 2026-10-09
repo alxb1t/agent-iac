@@ -12,12 +12,16 @@ from pathlib import Path
 RUNTIMES_DIR = Path(__file__).resolve().parents[2] / "runtimes"
 
 BOX_KEYS = ("name", "target", "runtime", "version", "backup")
-MANIFEST_KEYS = ("image", "state", "env", "blueprint_mount")
+BOX_OPTIONAL_KEYS = ("kb",)
+MANIFEST_KEYS = ("image", "state", "env", "blueprint_mount", "environment", "ports")
 HOST_SECRETS = ("TAILSCALE_AUTH_KEY", "RESTIC_PASSWORD")
+KB_SECRET = "KB_DEPLOY_KEY"
 
 NAME = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 RESTIC_URL = re.compile(r"^(local|sftp|rest|s3|b2|azure|gs|swift|rclone):\S+$")
+# GitHub only: its host keys are the ones the base blueprint pins (0003-the-knowledge-base design D3).
+KB_URL = re.compile(r"^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$")
 
 
 def known_runtimes(runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
@@ -28,17 +32,17 @@ def known_runtimes(runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
     return sorted(p.stem for p in runtimes_dir.glob("*.yaml"))
 
 
-def _key_errors(data: object, keys: tuple[str, ...], what: str) -> list[str]:
+def _key_errors(data: object, keys: tuple[str, ...], what: str, optional: tuple[str, ...] = ()) -> list[str]:
     if not isinstance(data, dict):
         return [f"{what}: must be a mapping"]
     missing = [k for k in keys if k not in data]
-    extra = sorted(str(k) for k in data if k not in keys)
+    extra = sorted(str(k) for k in data if k not in keys + optional)
     return [f"{what}: missing key {k}" for k in missing] + [f"{what}: unknown key {k}" for k in extra]
 
 
 def validate_box(box: object, runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
     """Return every error in a parsed box.yaml; an empty list means it is valid."""
-    errors = _key_errors(box, BOX_KEYS, "box.yaml")
+    errors = _key_errors(box, BOX_KEYS, "box.yaml", BOX_OPTIONAL_KEYS)
     if not isinstance(box, dict):
         return errors
     for key in BOX_KEYS:
@@ -53,11 +57,19 @@ def validate_box(box: object, runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
     backup = box.get("backup")
     if isinstance(backup, str) and backup and not RESTIC_URL.match(backup):
         errors.append("box.yaml: backup must be a restic repository URL, e.g. sftp:user@host:/path")
+    # fullmatch: `$` alone lets a trailing newline through.
+    if "kb" in box and not (isinstance(box["kb"], str) and KB_URL.fullmatch(box["kb"])):
+        errors.append("box.yaml: kb must be a GitHub SSH URL, e.g. git@github.com:example/example-kb.git")
     return errors
 
 
 def _is_abs_path(value: object) -> bool:
     return isinstance(value, str) and value.startswith("/")
+
+
+def _is_port(value: object) -> bool:
+    # bool is an int subclass: `True` would pass as port 1.
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
 
 
 def validate_manifest(manifest: object) -> list[str]:
@@ -80,11 +92,22 @@ def validate_manifest(manifest: object) -> list[str]:
             errors.append("manifest: env must be a list of environment variable names")
     if "blueprint_mount" in manifest and not _is_abs_path(manifest["blueprint_mount"]):
         errors.append("manifest: blueprint_mount must be an absolute path")
+    if "environment" in manifest:
+        environment = manifest["environment"]
+        if not (
+            isinstance(environment, dict)
+            and all(isinstance(k, str) and ENV_NAME.match(k) and isinstance(v, str) for k, v in environment.items())
+        ):
+            errors.append("manifest: environment must map environment variable names to strings")
+    if "ports" in manifest:
+        ports = manifest["ports"]
+        if not (isinstance(ports, list) and all(_is_port(p) for p in ports)):
+            errors.append("manifest: ports must be a list of TCP ports from 1 to 65535")
     return errors
 
 
-def missing_secrets(secrets: object, manifest: dict) -> list[str]:
+def missing_secrets(secrets: object, manifest: dict, box: dict) -> list[str]:
     """Return an error per secret name the box needs and the decrypted file lacks; values are never named."""
     have = secrets if isinstance(secrets, dict) else {}
-    need = list(manifest.get("env", [])) + list(HOST_SECRETS)
+    need = list(manifest.get("env", [])) + list(HOST_SECRETS) + ([KB_SECRET] if "kb" in box else [])
     return [f"secrets.sops.yaml: missing {n}" for n in need if n not in have]

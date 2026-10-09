@@ -1,6 +1,8 @@
 ---
-# Files no person writes: the OpenSpec CLI's, the gate's installed copy, and sops' ciphertext.
+# Files no person here writes: the OpenSpec CLI's, the gate's installed copy, sops' ciphertext, and the
+# vendored plugin, pinned by tests/test_vendored.py.
 exclude_paths:
   - openspec/
   - .ansible/
   - examples/box/secrets.sops.yaml
+  - blueprints/base/plugins/git-hook/

@@ -1,28 +1,4 @@
-# box-contracts Specification
-
-## Purpose
-
-The two files a box is declared by — `box.yaml` for a deployment and a runtime manifest for an agent — and the
-refusal of a file that does not fit.
-
-## Requirements
-
-### Requirement: Secrets are read only from the encrypted file
-`apply` SHALL read secrets only from `secrets.sops.yaml` in the deployment repo, decrypted on the operator's machine.
-Every name the manifest's `env` lists SHALL be present in the decrypted file, plus `TAILSCALE_AUTH_KEY` and
-`RESTIC_PASSWORD`, plus `KB_DEPLOY_KEY` when `box.yaml` sets `kb`.
-
-#### Scenario: A missing secret stops apply
-- **WHEN** the decrypted file lacks a name the manifest's `env` lists
-- **THEN** `apply` stops before touching the host, naming the missing name and never printing a value
-
-#### Scenario: A kb without its deploy key stops apply
-- **WHEN** `box.yaml` sets `kb` and the decrypted file lacks `KB_DEPLOY_KEY`
-- **THEN** `apply` stops before touching the host, naming `KB_DEPLOY_KEY`
-
-#### Scenario: No secret is written to the volume
-- **WHEN** `apply` has completed
-- **THEN** no file under the agent's state volume contains a value from `secrets.sops.yaml`
+## ADDED Requirements
 
 ### Requirement: box.yaml holds five fields and an optional kb
 A `box.yaml` SHALL contain the keys `name`, `target`, `runtime`, `version` and `backup`, each a non-empty string,
@@ -67,3 +43,32 @@ not secret. `ports` SHALL be a list of TCP port numbers from 1 to 65535.
 #### Scenario: A manifest with a bad port is refused
 - **WHEN** a manifest's `ports` holds `0` or `"9119"`
 - **THEN** validation fails, naming `ports`
+
+## MODIFIED Requirements
+
+### Requirement: Secrets are read only from the encrypted file
+`apply` SHALL read secrets only from `secrets.sops.yaml` in the deployment repo, decrypted on the operator's machine.
+Every name the manifest's `env` lists SHALL be present in the decrypted file, plus `TAILSCALE_AUTH_KEY` and
+`RESTIC_PASSWORD`, plus `KB_DEPLOY_KEY` when `box.yaml` sets `kb`.
+
+#### Scenario: A missing secret stops apply
+- **WHEN** the decrypted file lacks a name the manifest's `env` lists
+- **THEN** `apply` stops before touching the host, naming the missing name and never printing a value
+
+#### Scenario: A kb without its deploy key stops apply
+- **WHEN** `box.yaml` sets `kb` and the decrypted file lacks `KB_DEPLOY_KEY`
+- **THEN** `apply` stops before touching the host, naming `KB_DEPLOY_KEY`
+
+#### Scenario: No secret is written to the volume
+- **WHEN** `apply` has completed
+- **THEN** no file under the agent's state volume contains a value from `secrets.sops.yaml`
+
+## REMOVED Requirements
+
+### Requirement: box.yaml holds five fields
+**Reason**: `box.yaml` may now carry an optional `kb`; replaced by *box.yaml holds five fields and an optional kb*.
+**Migration**: none — every v0.2 `box.yaml` is still valid.
+
+### Requirement: A runtime manifest holds four fields
+**Reason**: the manifest gains `environment` and `ports`; replaced by *A runtime manifest holds six fields*.
+**Migration**: a manifest adds `environment: {}` and `ports: []` when it needs neither.

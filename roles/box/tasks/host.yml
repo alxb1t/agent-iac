@@ -87,6 +87,17 @@
   changed_when: false
   when: box_join is not skipped
 
+# The ports bind to this address alone, so the LAN cannot reach them even without the ruleset.
+- name: Read the tailnet address
+  ansible.builtin.command: tailscale ip -4
+  register: box_tailnet
+  changed_when: false
+  failed_when: box_tailnet.rc != 0 or box_tailnet.stdout | trim == ''
+
+- name: Keep the tailnet address
+  ansible.builtin.set_fact:
+    box_tailnet_ip: "{{ box_tailnet.stdout_lines[0] | trim }}"
+
 - name: Write the inbound ruleset
   ansible.builtin.template:
     src: nftables.conf.j2

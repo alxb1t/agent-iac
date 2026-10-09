@@ -43,5 +43,5 @@ CLI is recorded, not pinned: `@fission-ai/openspec@1.11.0`, resolved on `PATH`.
 ## Vocabulary — five words, one meaning each
 
 **box** · one machine made into a home for one agent — **target** · the machine before it is a box, as SSH
-reaches it — **runtime** · one kind of agent, declared by a four-field manifest — **tier** · what the box
+reaches it — **runtime** · one kind of agent, declared by a six-field manifest — **tier** · what the box
 enforces around the agent: `open` or `fenced` — **blueprint** · the agent's own config files, copied in at start.

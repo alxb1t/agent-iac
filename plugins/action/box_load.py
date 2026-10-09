@@ -65,7 +65,7 @@ class ActionModule(ActionBase):
         if errors:
             raise AnsibleActionFail(f"runtimes/{box['runtime']}.yaml: " + "; ".join(errors))
         secrets = _decrypt(box_path.parent / "secrets.sops.yaml")
-        errors = missing_secrets(secrets, manifest)
+        errors = missing_secrets(secrets, manifest, box)
         if errors:
             raise AnsibleActionFail("; ".join(errors))
 

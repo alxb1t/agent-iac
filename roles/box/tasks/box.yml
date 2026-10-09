@@ -1,5 +1,5 @@
 ---
-# The box side: env file, volume, blueprint, image and the quadlet. Guards: 0002-the-box design D10.
+# The box side: env file, volume, blueprint, image, the quadlet and the KB. Guards: 0002-the-box design D10.
 - name: Read the box user's uid
   ansible.builtin.getent:
     database: passwd
@@ -72,6 +72,43 @@
     group: root
     mode: "0755"
 
+# The key reaches the agent as a mounted Podman secret, kept off the volume and the env file.
+# Why: 0003-the-knowledge-base design D4.
+- name: Keep the KB deploy key as a Podman secret
+  when: box.kb is defined
+  become: true
+  become_user: "{{ box_user }}"
+  environment: "{{ box_user_env }}"
+  vars:
+    box_kb_key: "{{ (box_secrets.KB_DEPLOY_KEY | trim) ~ '\n' }}"
+    box_kb_key_sha256: "{{ box_kb_key | hash('sha256') }}"
+    box_kb_secret_name: "{{ box.name }}-kb-deploy-key"
+  block:
+    # Inspect shows no value, so a label holding the key's hash is the idempotence guard.
+    - name: Read the deploy key's hash
+      ansible.builtin.command:
+        argv:
+          - podman
+          - secret
+          - inspect
+          - --format
+          - "{% raw %}{{ .Spec.Labels.sha256 }}{% endraw %}"
+          - "{{ box_kb_secret_name }}"
+      register: box_kb_secret
+      changed_when: false
+      failed_when: false
+
+    - name: Store the deploy key
+      ansible.builtin.command:
+        cmd: >-
+          podman secret create --replace --label sha256={{ box_kb_key_sha256 }} {{ box_kb_secret_name }} -
+        stdin: "{{ box_kb_key }}"
+        stdin_add_newline: false
+      when: box_kb_secret.stdout | trim != box_kb_key_sha256
+      changed_when: true
+      no_log: true
+      notify: Restart the box
+
 - name: Write the quadlet
   ansible.builtin.template:
     src: box.container.j2
@@ -125,3 +162,30 @@
         scope: user
         daemon_reload: true
       register: box_start
+
+    # A running box restarts only in the handler: run it now, so the clone runs in the container the new
+    # quadlet starts, with the key and the pinned host keys, and a failed clone cannot drop the restart.
+    - name: Restart the box before the clone
+      ansible.builtin.meta: flush_handlers
+
+    # Once: an existing clone may hold unpushed commits, and git-hook owns its sync.
+    # Why: 0003-the-knowledge-base design D7.
+    - name: Clone the KB once
+      when: box.kb is defined
+      block:
+        # rc 0 or 1 is test's answer; anything else is podman's, while the container is still starting.
+        - name: Look for the KB clone
+          ansible.builtin.command: podman exec {{ box.name }} test -d {{ manifest.blueprint_mount }}/kb/.git
+          register: box_kb_clone
+          until: box_kb_clone.rc in [0, 1]
+          retries: 10
+          delay: 3
+          changed_when: false
+          failed_when: box_kb_clone.rc not in [0, 1]
+
+        # A refused clone fails here; the failure shows the command, naming the repository, and git's stderr.
+        - name: Clone the KB
+          ansible.builtin.command:
+            cmd: podman exec --user 10000 {{ box.name }} git clone {{ box.kb }} {{ manifest.blueprint_mount }}/kb
+          when: box_kb_clone.rc == 1
+          changed_when: true
