@@ -168,24 +168,6 @@
     - name: Restart the box before the clone
       ansible.builtin.meta: flush_handlers
 
-    # Once: an existing clone may hold unpushed commits, and git-hook owns its sync.
-    # Why: 0003-the-knowledge-base design D7.
-    - name: Clone the KB once
-      when: box.kb is defined
-      block:
-        # rc 0 or 1 is test's answer; anything else is podman's, while the container is still starting.
-        - name: Look for the KB clone
-          ansible.builtin.command: podman exec {{ box.name }} test -d {{ manifest.blueprint_mount }}/kb/.git
-          register: box_kb_clone
-          until: box_kb_clone.rc in [0, 1]
-          retries: 10
-          delay: 3
-          changed_when: false
-          failed_when: box_kb_clone.rc not in [0, 1]
-
-        # A refused clone fails here; the failure shows the command, naming the repository, and git's stderr.
-        - name: Clone the KB
-          ansible.builtin.command:
-            cmd: podman exec --user 10000 {{ box.name }} git clone {{ box.kb }} {{ manifest.blueprint_mount }}/kb
-          when: box_kb_clone.rc == 1
-          changed_when: true
+# Shared with restore: 0004-the-handover design D9.
+- name: Import the KB clone
+  ansible.builtin.import_tasks: kb.yml

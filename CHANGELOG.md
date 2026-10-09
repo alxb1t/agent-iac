@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `box_load` reads the age recipients of `.sops.yaml` beside `box.yaml` and refuses a file naming none, so the archives go to the same keys as the secrets.
 - The nightly backup no longer stops the agent: `box-backup` runs the manifest's `backup` in the container, pipes the zip through `age` to the recipients and `rclone rcat`s it to R2, then keeps the newest five; a delete the bucket's lock refuses is a warning, not a failure.
 - The host carries `age` and `rclone` instead of `restic`; `apply` writes the rclone env and the recipients, and removes the restic env file with its password.
+- `restore` and `restore-drill` fetch and decrypt the archive on the machine running `make`, so the box never holds a private key. `restore` stops the service, imports the archive in a one-off container and starts it again on every exit; with `kb:`, it then clones the KB afresh through the role's new `kb.yml`. `-e box_archive=<file>` picks an archive.
+- `restore-drill` imports into a scratch volume and checks `state.db`'s integrity, its `sessions` table and `config.yaml`, printing the session count, instead of diffing against a live state that has moved on. `status`'s third line names the newest archive.
 
 ## [0.3.0] - 2026-10-09
 

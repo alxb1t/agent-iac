@@ -7,7 +7,7 @@ green gate.
 
 - [x] 1 — The contracts
 - [x] 2 — The backup
-- [ ] 3 — Restore, the drill and status
+- [x] 3 — Restore, the drill and status
 - [ ] 4 — The bootstrap
 - [ ] 5 — The example and the docs
 
@@ -38,13 +38,13 @@ green gate.
 
 ## 3 — Restore, the drill and status
 
-- [ ] 3.1 Move the *Clone the KB once* block from `roles/box/tasks/box.yml` to `roles/box/tasks/kb.yml`, imported after the flush, per [D9](design.md#d9).
+- [x] 3.1 Move the *Clone the KB once* block from `roles/box/tasks/box.yml` to `roles/box/tasks/kb.yml`, imported after the flush, per [D9](design.md#d9).
       Verify: `grep -c 'git clone' roles/box/tasks/kb.yml` prints `1` and `grep -c 'git clone' roles/box/tasks/box.yml` prints `0`.
-- [ ] 3.2 Rewrite `playbooks/restore.yml` per [D7](design.md#d7) and [D8](design.md#d8).
+- [x] 3.2 Rewrite `playbooks/restore.yml` per [D7](design.md#d7) and [D8](design.md#d8).
       Verify: `grep -c 'restic' playbooks/restore.yml` prints `0` and `grep -c -- '--entrypoint' playbooks/restore.yml` prints a number above `0`.
-- [ ] 3.3 Rewrite `playbooks/restore_drill.yml` per [D10](design.md#d10) and `playbooks/status.yml` per [D11](design.md#d11).
+- [x] 3.3 Rewrite `playbooks/restore_drill.yml` per [D10](design.md#d10) and `playbooks/status.yml` per [D11](design.md#d11).
       Verify: `grep -c 'restic' playbooks/restore_drill.yml playbooks/status.yml | grep -c ':0$'` prints `2` and `grep -c 'integrity_check' playbooks/restore_drill.yml` prints `1`.
-- [ ] 3.4 Edit `tests/test_plays.py` per [D15](design.md#d15), replacing `test_restore_deletes_only_inside_the_volume`
+- [x] 3.4 Edit `tests/test_plays.py` per [D15](design.md#d15), replacing `test_restore_deletes_only_inside_the_volume`
       and pointing the KB tests at `roles/box/tasks/kb.yml`.
       Verify: `uv run pytest -q tests/test_plays.py` prints `passed` and no `failed`, and `grep -c 'kb.yml' tests/test_plays.py` prints a number above `0`.
 
