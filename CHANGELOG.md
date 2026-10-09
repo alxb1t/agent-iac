@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `box.yaml` takes an optional `kb:`, a GitHub SSH URL; with it, `KB_DEPLOY_KEY` is a required secret, so a KB without its key is refused before any connection.
+
+### Changed
+
+- The runtime manifest has six fields: `environment` and `ports` join it, so a runtime declares its fixed variables and ports. The Hermes manifest sets the KB paths and the dashboard, and requires the dashboard login.
+
 ## [0.2.0] - 2026-10-08
 
 ### Added

@@ -5,7 +5,7 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## Progress
 
-- [ ] 1 — The contracts
+- [x] 1 — The contracts
 - [ ] 2 — The quadlet and the tailnet address
 - [ ] 3 — The deploy key and the clone
 - [ ] 4 — The plugin and the base blueprint
@@ -13,14 +13,14 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## 1 — The contracts
 
-- [ ] 1.1 Edit `plugins/module_utils/box_schema.py` per [D1](design.md#d1) and [D3](design.md#d3):
+- [x] 1.1 Edit `plugins/module_utils/box_schema.py` per [D1](design.md#d1) and [D3](design.md#d3):
       `MANIFEST_KEYS` with `environment` and `ports`, `BOX_OPTIONAL_KEYS`, the `kb` pattern, `missing_secrets(secrets, manifest, box)`.
       Verify: `grep -c 'BOX_OPTIONAL_KEYS' plugins/module_utils/box_schema.py` prints a number above `1`.
-- [ ] 1.2 Pass `box` to `missing_secrets` in `plugins/action/box_load.py`.
+- [x] 1.2 Pass `box` to `missing_secrets` in `plugins/action/box_load.py`.
       Verify: `grep -c 'missing_secrets(secrets, manifest, box)' plugins/action/box_load.py` prints `1`.
-- [ ] 1.3 Write `runtimes/hermes.yaml` as [D2](design.md#d2) shows.
+- [x] 1.3 Write `runtimes/hermes.yaml` as [D2](design.md#d2) shows.
       Verify: `grep -c '^ports:' runtimes/hermes.yaml` prints `1` and `grep -c 'PASSWORD_HASH' runtimes/hermes.yaml` prints `1`.
-- [ ] 1.4 Edit `tests/test_box_schema.py` per [D10](design.md#d10), and add the dashboard names to `tests/conftest.py`'s sample secrets.
+- [x] 1.4 Edit `tests/test_box_schema.py` per [D10](design.md#d10), and add the dashboard names to `tests/conftest.py`'s sample secrets.
       Verify: `uv run pytest -q tests/test_box_schema.py` prints `passed` and no `failed`, and
       `grep -c 'KB_DEPLOY_KEY' tests/test_box_schema.py` prints a number above `0`.
 
