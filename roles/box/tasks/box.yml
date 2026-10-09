@@ -81,6 +81,8 @@
   environment: "{{ box_user_env }}"
   vars:
     box_kb_key: "{{ (box_secrets.KB_DEPLOY_KEY | trim) ~ '\n' }}"
+    box_kb_key_sha256: "{{ box_kb_key | hash('sha256') }}"
+    box_kb_secret_name: "{{ box.name }}-kb-deploy-key"
   block:
     # Inspect shows no value, so a label holding the key's hash is the idempotence guard.
     - name: Read the deploy key's hash
@@ -91,7 +93,7 @@
           - inspect
           - --format
           - "{% raw %}{{ .Spec.Labels.sha256 }}{% endraw %}"
-          - "{{ box.name }}-kb-deploy-key"
+          - "{{ box_kb_secret_name }}"
       register: box_kb_secret
       changed_when: false
       failed_when: false
@@ -99,11 +101,10 @@
     - name: Store the deploy key
       ansible.builtin.command:
         cmd: >-
-          podman secret create --replace --label sha256={{ box_kb_key | hash('sha256') }}
-          {{ box.name }}-kb-deploy-key -
+          podman secret create --replace --label sha256={{ box_kb_key_sha256 }} {{ box_kb_secret_name }} -
         stdin: "{{ box_kb_key }}"
         stdin_add_newline: false
-      when: box_kb_secret.stdout | trim != box_kb_key | hash('sha256')
+      when: box_kb_secret.stdout | trim != box_kb_key_sha256
       changed_when: true
       no_log: true
       notify: Restart the box
@@ -177,15 +178,9 @@
           changed_when: false
           failed_when: box_kb_clone.rc not in [0, 1]
 
+        # A refused clone fails here; the failure shows the command, naming the repository, and git's stderr.
         - name: Clone the KB
           ansible.builtin.command:
             cmd: podman exec --user 10000 {{ box.name }} git clone {{ box.kb }} {{ manifest.blueprint_mount }}/kb
-          register: box_kb_cloned
           when: box_kb_clone.rc == 1
           changed_when: true
-          failed_when: false
-
-        - name: Fail on a refused clone
-          ansible.builtin.fail:
-            msg: "cannot clone {{ box.kb }}: {{ box_kb_cloned.stderr | trim }}"
-          when: box_kb_cloned is not skipped and box_kb_cloned.rc != 0

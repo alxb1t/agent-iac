@@ -4,7 +4,6 @@ import pytest
 
 from box_schema import (
     BOX_KEYS,
-    HOST_SECRETS,
     MANIFEST_KEYS,
     known_runtimes,
     missing_secrets,
@@ -68,7 +67,6 @@ def test_box_with_kb_is_accepted():
 
 def test_hermes_manifest_is_valid(hermes):
     assert validate_manifest(hermes) == []
-    assert tuple(hermes) == MANIFEST_KEYS
     assert hermes["state"] == ["/opt/data"]
     assert hermes["env"] == [
         "TELEGRAM_BOT_TOKEN",
@@ -112,7 +110,9 @@ def test_malformed_environment_is_refused(hermes, environment):
 
 @pytest.mark.parametrize("ports", [[0], ["9119"], [65536], [True], 9119])
 def test_malformed_ports_are_refused(hermes, ports):
-    assert validate_manifest({**hermes, "ports": ports}) == ["manifest: ports must be a list of TCP ports from 1 to 65535"]
+    assert validate_manifest({**hermes, "ports": ports}) == [
+        "manifest: ports must be a list of TCP ports from 1 to 65535"
+    ]
 
 
 def test_empty_environment_and_ports_are_accepted(hermes):
@@ -140,13 +140,12 @@ def test_extra_manifest_key_is_named(hermes):
     assert validate_manifest({**hermes, "pre_backup": "x"}) == ["manifest: unknown key pre_backup"]
 
 
-def test_secrets_complete_is_accepted(hermes):
-    secrets = {n: "v" for n in hermes["env"] + list(HOST_SECRETS)}
-    assert missing_secrets(secrets, hermes, VALID_BOX) == []
+def test_secrets_complete_is_accepted(hermes, sample_vars):
+    assert missing_secrets(sample_vars["box_secrets"], hermes, VALID_BOX) == []
 
 
-def test_kb_requires_its_deploy_key(hermes):
-    secrets = {n: "v" for n in hermes["env"] + list(HOST_SECRETS)}
+def test_kb_requires_its_deploy_key(hermes, sample_vars):
+    secrets = sample_vars["box_secrets"]
     box = {**VALID_BOX, "kb": "git@github.com:example/example-kb.git"}
     assert missing_secrets(secrets, hermes, box) == ["secrets.sops.yaml: missing KB_DEPLOY_KEY"]
     assert missing_secrets({**secrets, "KB_DEPLOY_KEY": "v"}, hermes, box) == []

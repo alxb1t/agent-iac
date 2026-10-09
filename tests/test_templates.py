@@ -100,7 +100,7 @@ def test_quadlet_with_kb_mounts_the_key_and_names_the_box(render, sample_vars):
 
 def test_quadlet_without_kb_has_no_kb_line(render):
     text = render("box.container.j2")
-    assert [line for line in KB_LINES if line in text] == []
+    assert missing(text, KB_LINES) == KB_LINES
     assert "GIT_SSH_COMMAND" not in text
 
 

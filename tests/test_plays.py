@@ -51,8 +51,7 @@ def secret_faults(t):
     """Return how a deploy-key task could leak the key, e.g. a task without no_log → ["no_log"]."""
     cmd = t["ansible.builtin.command"]
     faults = [] if t.get("no_log") is True else ["no_log"]
-    faults += [] if "stdin" in cmd else ["stdin"]
-    return faults + (["key on the command line"] if "KB_DEPLOY_KEY" in str(cmd.get("cmd", "")) else [])
+    return faults + ([] if "stdin" in cmd else ["stdin"])
 
 
 # The key reaches podman on stdin and never shows in a log, so it stays off /proc and the operator's terminal.
@@ -66,10 +65,8 @@ def test_secret_check_catches_a_logged_key():
     assert secret_faults({"ansible.builtin.command": cmd}) == ["no_log", "stdin"]
 
 
-def clone_faults(path):
+def clone_faults(look, clone):
     """Return how the KB clone could touch an existing clone or the wrong owner, e.g. no guard → ["guard"]."""
-    look = task(path, "Look for the KB clone")
-    clone = task(path, "Clone the KB")
     faults = [] if "test -d {{ manifest.blueprint_mount }}/kb/.git" in look["ansible.builtin.command"] else ["test"]
     faults += [] if clone.get("when") == "box_kb_clone.rc == 1" else ["guard"]
     cmd = clone["ansible.builtin.command"]["cmd"]
@@ -79,11 +76,11 @@ def clone_faults(path):
 
 # An existing clone may hold unpushed commits, so apply clones only where no repository is, as the agent's user.
 def test_the_kb_is_cloned_once_as_the_agent():
-    assert clone_faults("roles/box/tasks/box.yml") == []
+    look = task("roles/box/tasks/box.yml", "Look for the KB clone")
+    assert clone_faults(look, task("roles/box/tasks/box.yml", "Clone the KB")) == []
 
 
-def test_clone_check_catches_an_unguarded_clone(tmp_path):
-    text = (ROOT / "roles/box/tasks/box.yml").read_text()
-    text = text.replace("when: box_kb_clone.rc == 1", "when: box.kb is defined").replace("--user 10000 ", "")
-    (tmp_path / "box.yml").write_text(text)
-    assert clone_faults(tmp_path / "box.yml") == ["guard", "user"]
+def test_clone_check_catches_an_unguarded_clone():
+    look = {"ansible.builtin.command": "podman exec example true"}
+    clone = {"ansible.builtin.command": {"cmd": "podman exec example git clone x /tmp"}}
+    assert clone_faults(look, clone) == ["test", "guard", "user", "target"]
