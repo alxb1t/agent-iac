@@ -9,6 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "roles" / "box" / "templates"
+DEFAULTS = ROOT / "roles" / "box" / "defaults" / "main.yml"
 # The public half of tests/keys/example.age.
 EXAMPLE_RECIPIENT = "age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q"
 
@@ -21,13 +22,38 @@ VALID_BOX = {
 }
 
 
+def jinja_env(**options):
+    """Return a Jinja environment that refuses an undefined name and has Ansible's `quote`, as shlex's."""
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined, **options)
+    env.filters["quote"] = shlex.quote
+    return env
+
+
+def with_role_defaults(values):
+    """Return values plus the role's defaults they do not set, each rendered over the names before it."""
+    env, scope = jinja_env(), dict(values)
+
+    def resolve(value):
+        if isinstance(value, str):
+            return env.from_string(value).render(scope)
+        if isinstance(value, dict):
+            return {k: resolve(v) for k, v in value.items()}
+        return [resolve(v) for v in value] if isinstance(value, list) else value
+
+    # A default names only the defaults above it, so one pass in file order resolves them all.
+    for name, value in yaml.safe_load(DEFAULTS.read_text()).items():
+        if name not in values:
+            scope[name] = resolve(value)
+    return scope
+
+
 @pytest.fixture(scope="session")
 def hermes():
     return yaml.safe_load((ROOT / "runtimes" / "hermes.yaml").read_text())
 
 
 @pytest.fixture(scope="session")
-def sample_vars(hermes):
+def sample_values(hermes):
     return {
         "box": VALID_BOX,
         "manifest": hermes,
@@ -42,29 +68,23 @@ def sample_vars(hermes):
             "R2_ACCESS_KEY_ID": "example-r2-access-key-id",
             "R2_SECRET_ACCESS_KEY": "example-r2-secret-access-key",
         },
-        "box_user": "box",
-        "box_config": "/home/box/.config/agent-iac",
-        "box_rclone_env": "/home/box/.config/agent-iac/example.rclone.env",
-        "box_recipients_file": "/home/box/.config/agent-iac/example.recipients",
-        "box_r2_account": "0123456789abcdef0123456789abcdef",
-        "box_r2_bucket": "example-backups",
         "box_tailnet_ip": "100.64.0.1",
         "box_recipients": [EXAMPLE_RECIPIENT],
     }
 
 
 @pytest.fixture(scope="session")
-def render(sample_vars):
+def sample_vars(sample_values):
+    return with_role_defaults(sample_values)
+
+
+@pytest.fixture(scope="session")
+def render(sample_values):
     # The template module's defaults; `quote` is Ansible's filter of the same name.
-    env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(TEMPLATES),
-        undefined=jinja2.StrictUndefined,
-        trim_blocks=True,
-        keep_trailing_newline=True,
-    )
-    env.filters["quote"] = shlex.quote
+    env = jinja_env(loader=jinja2.FileSystemLoader(TEMPLATES), trim_blocks=True, keep_trailing_newline=True)
 
     def _render(name, **overrides):
-        return env.get_template(name).render({**sample_vars, **overrides})
+        # The defaults are derived again, so an override of `box` or `box_secrets` reaches them.
+        return env.get_template(name).render(with_role_defaults({**sample_values, **overrides}))
 
     return _render

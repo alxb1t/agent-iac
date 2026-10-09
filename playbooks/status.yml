@@ -37,7 +37,7 @@
           - "-"
           - "{{ box_user }}"
           - -c
-          - "{{ box_as_user }} rclone lsf --files-only --include '{{ box.name }}-*.zip.age' r2:{{ box_r2_bucket }}"
+          - "{{ box_as_user }} rclone lsf --files-only --include '{{ box_archives_glob }}' r2:{{ box_r2_bucket }}"
       register: box_archives
       changed_when: false
 

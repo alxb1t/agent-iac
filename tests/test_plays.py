@@ -5,43 +5,31 @@ import sqlite3
 import subprocess
 import sys
 
-import jinja2
 import pytest
 import yaml
 
-from conftest import ROOT
-
-
-def tasks(path):
-    """Yield every task in a playbook or a task file, blocks flattened, e.g. a block's `always` tasks too."""
-
-    def walk(items):
-        for item in items or []:
-            yield item
-            for key in ("tasks", "block", "rescue", "always"):
-                yield from walk(item.get(key))
-
-    yield from walk(yaml.safe_load((ROOT / path).read_text()))
-
-
-def task(path, name):
-    return next(t for t in tasks(path) if t.get("name") == name)
+from conftest import ROOT, jinja_env
 
 
 def plays(path):
     return yaml.safe_load((ROOT / path).read_text())
 
 
-def play_tasks(play):
-    """Return a play's tasks, blocks flattened."""
-    return list(tasks_in(play.get("tasks")))
-
-
-def tasks_in(items):
+def walk(items):
+    """Yield every item and the tasks under it, blocks flattened, e.g. a block's `always` tasks too."""
     for item in items or []:
         yield item
-        for key in ("block", "rescue", "always"):
-            yield from tasks_in(item.get(key))
+        for key in ("tasks", "block", "rescue", "always"):
+            yield from walk(item.get(key))
+
+
+def tasks(path):
+    """Yield every task in a playbook or a task file."""
+    yield from walk(plays(path))
+
+
+def task(path, name):
+    return next(t for t in tasks(path) if t.get("name") == name)
 
 
 def argv(t):
@@ -65,8 +53,7 @@ def test_restore_stops_before_the_import_and_starts_in_always():
 
 def import_words(path, sample_vars):
     """Return the import command of a playbook, rendered with the sample vars and split as `command` splits it."""
-    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
-    env.filters["quote"] = shlex.quote
+    env = jinja_env()
     play_vars = plays(path)[-1]["vars"]
     values = {**sample_vars, "box_zip": "/z/restore.zip", "box_in_container": play_vars["box_in_container"]}
     return shlex.split(env.from_string(task(path, "Import the archive")["ansible.builtin.command"]["cmd"]).render(values))
@@ -94,29 +81,36 @@ def test_restore_replaces_the_kb_only_with_kb():
     assert rm["when"] == "box.kb is defined"
     assert argv(rm)[:4] == ["podman", "unshare", "rm", "-rf"] and argv(rm)[4].endswith("/kb")
     steps = plays("playbooks/restore.yml")[-1]["tasks"]
-    clone = next(t for t in steps if "ansible.builtin.include_role" in t)
-    assert clone["ansible.builtin.include_role"]["tasks_from"] == "kb.yml"
+    clone = next(t for t in steps if t.get("ansible.builtin.include_role", {}).get("tasks_from") == "kb.yml")
     assert names(steps).index(RESTORE_BLOCK) < steps.index(clone)
 
 
+FETCH = "roles/box/tasks/fetch.yml"
+
+
+def runs_age_decrypt(t):
+    return "'age', '-d'" in str(t.get("ansible.builtin.command", ""))
+
+
 def decrypting_hosts(play_list):
-    """Return the hosts of the plays that run `age -d`, e.g. a box play decrypting → {"box"}."""
-    return {p["hosts"] for p in play_list for t in play_tasks(p) if "age -d" in " ".join(map(str, argv_or_cmd(t)))}
+    """Return the hosts of the plays that run `age -d` or include fetch.yml, e.g. a box play decrypting → {"box"}."""
+    def decrypts(t):
+        return runs_age_decrypt(t) or t.get("ansible.builtin.include_role", {}).get("tasks_from") == "fetch.yml"
 
-
-def argv_or_cmd(t):
-    cmd = t.get("ansible.builtin.command", {})
-    return cmd.get("argv", []) if isinstance(cmd, dict) else [cmd]
+    return {p["hosts"] for p in play_list if any(decrypts(t) for t in walk(p.get("tasks")))}
 
 
 # The box holds public keys only, so the private key never leaves the machine running make: design D7.
 def test_archives_are_decrypted_only_on_the_operators_machine():
+    assert any(runs_age_decrypt(t) for t in tasks(FETCH))
     for path in ("playbooks/restore.yml", "playbooks/restore_drill.yml"):
         assert decrypting_hosts(plays(path)) == {"localhost"}
 
 
 def test_decrypt_check_catches_a_decrypt_on_the_box():
     play = {"hosts": "box", "tasks": [{"ansible.builtin.command": {"argv": ["age", "-d", "x"]}}]}
+    assert decrypting_hosts([play]) == {"box"}
+    play = {"hosts": "box", "tasks": [{"ansible.builtin.include_role": {"tasks_from": "fetch.yml"}}]}
     assert decrypting_hosts([play]) == {"box"}
 
 

@@ -24,7 +24,7 @@ podman unshare cat "$data/backups/agent-iac.zip" | age -R {{ box_recipients_file
   rclone rcat "{{ remote }}/$archive" || fail "the upload of $archive failed"
 
 # The names sort by time; a delete the bucket's lock refuses is the lock working.
-rclone lsf --files-only --include '{{ box.name }}-*.zip.age' {{ remote }} | sort -r | tail -n +6 |
+rclone lsf --files-only --include '{{ box_archives_glob }}' {{ remote }} | sort -r | tail -n +6 |
   while read -r old; do
     rclone deletefile "{{ remote }}/$old" ||
       logger -p user.warning -t box-backup "{{ box.name }}: the bucket kept $old"

@@ -12,89 +12,14 @@
 - name: Fetch and decrypt the archive
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../roles/box/defaults/main.yml
   vars:
     box: "{{ hostvars[groups.box[0]].box }}"
     box_secrets: "{{ hostvars[groups.box[0]].box_secrets }}"
-    box_rclone:
-      RCLONE_CONFIG_R2_TYPE: s3
-      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-      RCLONE_CONFIG_R2_ACCESS_KEY_ID: "{{ box_secrets.R2_ACCESS_KEY_ID }}"
-      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "{{ box_secrets.R2_SECRET_ACCESS_KEY }}"
-      RCLONE_CONFIG_R2_ENDPOINT: "https://{{ box_r2_account }}.r2.cloudflarestorage.com"
-      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"
-    # The file sops already decrypts the secrets with.
-    box_identity: >-
-      {{ lookup('ansible.builtin.env', 'SOPS_AGE_KEY_FILE')
-         or lookup('ansible.builtin.first_found', box_identities, errors='ignore') }}
-    box_identities:
-      - "{{ lookup('ansible.builtin.env', 'HOME') }}/Library/Application Support/sops/age/keys.txt"
-      - "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/sops/age/keys.txt"
   tasks:
-    - name: Fetch and decrypt in a private folder
-      block:
-        - name: Find the age identity
-          ansible.builtin.assert:
-            that: box_identity | trim | length > 0
-            fail_msg: no age identity; set SOPS_AGE_KEY_FILE or put the key in ~/.config/sops/age/keys.txt
-            quiet: true
-
-        - name: Make the private folder
-          ansible.builtin.tempfile:
-            state: directory
-            prefix: agent-iac-restore-
-          register: box_tmp
-
-        - name: List the archives
-          ansible.builtin.command:
-            argv: [rclone, lsf, --files-only, --include, "{{ box.name }}-*.zip.age", "r2:{{ box_r2_bucket }}"]
-          environment: "{{ box_rclone }}"
-          register: box_archives
-          changed_when: false
-          no_log: true
-          when: box_archive is not defined
-
-        # The names sort by time, so the last is the newest.
-        - name: Pick the archive
-          ansible.builtin.set_fact:
-            box_pick: >-
-              {{ box_archive if box_archive is defined else (box_archives.stdout_lines | sort | last | default('')) }}
-
-        - name: Stop when the bucket holds no archive
-          ansible.builtin.assert:
-            that: box_pick | length > 0
-            fail_msg: "r2:{{ box_r2_bucket }} holds no archive of {{ box.name }}"
-            quiet: true
-
-        - name: Download the archive
-          ansible.builtin.command:
-            argv: [rclone, copyto, "r2:{{ box_r2_bucket }}/{{ box_pick }}", "{{ box_tmp.path }}/{{ box_pick }}"]
-          environment: "{{ box_rclone }}"
-          changed_when: true
-          no_log: true
-
-        - name: Decrypt the archive
-          ansible.builtin.command:
-            argv:
-              - age
-              - -d
-              - -i
-              - "{{ box_identity | trim }}"
-              - -o
-              - "{{ box_tmp.path }}/restore.zip"
-              - "{{ box_tmp.path }}/{{ box_pick }}"
-          changed_when: true
-      rescue:
-        - name: Remove the private folder
-          ansible.builtin.file:
-            path: "{{ box_tmp.path }}"
-            state: absent
-          when: box_tmp.path is defined
-
-        - name: Name the step that failed
-          ansible.builtin.fail:
-            msg: "{{ ansible_failed_task.name }} failed; the box was not touched"
+    - name: Fetch and decrypt the archive
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: fetch.yml
 
 # A stopped service holds no database; the start and the clean-up run on every exit.
 # Why: 0004-the-handover design D8.
@@ -108,16 +33,10 @@
     box_zip: "{{ box_config }}/{{ box.name }}/restore.zip"
     box_in_container: /tmp/agent-iac-restore.zip
   tasks:
-    - name: Read the box user's uid
-      ansible.builtin.getent:
-        database: passwd
-        key: "{{ box_user }}"
-
     - name: Set the box user's bus
-      ansible.builtin.set_fact:
-        box_user_env:
-          XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}"
-          DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}/bus"
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: user_env.yml
 
     - name: Restore with the service stopped
       become: true
