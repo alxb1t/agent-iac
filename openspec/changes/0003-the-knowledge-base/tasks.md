@@ -8,7 +8,7 @@ base blueprint, the example and the docs. Each ends on a green gate.
 - [x] 1 — The contracts
 - [x] 2 — The quadlet and the tailnet address
 - [x] 3 — The deploy key and the clone
-- [ ] 4 — The plugin and the base blueprint
+- [x] 4 — The plugin and the base blueprint
 - [ ] 5 — The example and the docs
 
 ## 1 — The contracts
@@ -49,14 +49,14 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## 4 — The plugin and the base blueprint
 
-- [ ] 4.1 Copy the files of [D8](design.md#d8) from `https://github.com/aean0x/hermes-git-hook` at `a7303c8` into
+- [x] 4.1 Copy the files of [D8](design.md#d8) from `https://github.com/aean0x/hermes-git-hook` at `a7303c8` into
       `blueprints/base/plugins/git-hook/`, byte for byte, and add the directory to `.ansible-lint`'s `exclude_paths`.
       Verify: `shasum -a 256 blueprints/base/plugins/git-hook/sync.py` prints
       `591f6a7343d70a63e5c0ef79e58f4ff0bae9bb5799ccbfd7143f637d850554e5` and
       `grep -c 'blueprints/base/plugins/git-hook/' .ansible-lint` prints `1`.
-- [ ] 4.2 Write `tests/test_vendored.py` per [D8](design.md#d8) and [D10](design.md#d10).
+- [x] 4.2 Write `tests/test_vendored.py` per [D8](design.md#d8) and [D10](design.md#d10).
       Verify: `uv run pytest -q tests/test_vendored.py` prints `passed` and no `failed`.
-- [ ] 4.3 Enable the plugin in `blueprints/base/config.yaml` per [D8](design.md#d8), and add the paragraph of
+- [x] 4.3 Enable the plugin in `blueprints/base/config.yaml` per [D8](design.md#d8), and add the paragraph of
       [D9](design.md#d9) to `blueprints/base/SOUL.md`.
       Verify: `grep -c 'git-hook' blueprints/base/config.yaml` prints `1` and `grep -c '/opt/data/kb' blueprints/base/SOUL.md` prints `1`.
 
