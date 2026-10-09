@@ -14,6 +14,10 @@ existing one. When `kb` is not set, `apply` SHALL clone nothing.
 - **WHEN** `apply` runs with `kb` set and `/opt/data/kb` holds no git repository
 - **THEN** `/opt/data/kb` holds a clone of the repository, owned by the agent's user, and the task reports changed
 
+#### Scenario: A running box gains a KB
+- **WHEN** `apply` runs with `kb` newly set on a box whose service already runs
+- **THEN** the service restarts with the key mounted before the clone runs, and `/opt/data/kb` holds a clone
+
 #### Scenario: A second apply leaves the KB alone
 - **WHEN** `apply` runs again on a box whose `/opt/data/kb` holds a clone with unpushed commits
 - **THEN** the clone and its commits are unchanged, and the task reports nothing changed
@@ -24,8 +28,8 @@ existing one. When `kb` is not set, `apply` SHALL clone nothing.
 
 ### Requirement: The deploy key reaches the agent only as a mounted file
 When `box.yaml` sets `kb`, `apply` SHALL store `KB_DEPLOY_KEY` as a Podman secret of the box user and mount it into
-the container as a file readable only by the agent's user. Git in the container SHALL use that key, and SHALL trust
-only the GitHub host keys the base blueprint pins. The key SHALL NOT be written to the env file or the state volume.
+the container as a file readable only by the agent's user. Git in the container, the sync plugin's included, SHALL
+use that key, and SHALL trust only the GitHub host keys the base blueprint pins. The key SHALL NOT be written to the env file or the state volume.
 
 #### Scenario: The key is a file, not a variable
 - **WHEN** the service runs a box with `kb` set
@@ -35,6 +39,10 @@ only the GitHub host keys the base blueprint pins. The key SHALL NOT be written 
 #### Scenario: A changed key replaces the secret
 - **WHEN** `KB_DEPLOY_KEY` changes in `secrets.sops.yaml` and `apply` runs
 - **THEN** the Podman secret holds the new key and the service is restarted
+
+#### Scenario: The plugin's push uses the key and the pin
+- **WHEN** the sync plugin pushes the KB with its own `GIT_SSH_COMMAND`
+- **THEN** ssh offers only `/run/secrets/kb_deploy_key` and checks `github.com` against the pinned host keys
 
 #### Scenario: An unknown host key is refused
 - **WHEN** the host answering for `github.com` presents a key the base blueprint does not pin

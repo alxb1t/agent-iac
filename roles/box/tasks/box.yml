@@ -163,6 +163,11 @@
         daemon_reload: true
       register: box_start
 
+    # A running box restarts only in the handler: run it now, so the clone runs in the container the new
+    # quadlet starts, with the key and the pinned host keys, and a failed clone cannot drop the restart.
+    - name: Restart the box before the clone
+      ansible.builtin.meta: flush_handlers
+
     # Once: an existing clone may hold unpushed commits, and git-hook owns its sync.
     # Why: 0003-the-knowledge-base design D7.
     - name: Clone the KB once

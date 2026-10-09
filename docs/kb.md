@@ -15,13 +15,15 @@ box `example`, `example <example@box.invalid>`. Where the KB sits among the repo
 ## 1 — The operator: the KB repo and its deploy key
 
 1. Make a **private** GitHub repo for the client's KB, e.g. `example/example-kb`. GitHub is the only host the box
-   trusts: its host keys are pinned in `blueprints/base/.ssh/kb_known_hosts`.
+   trusts: its host keys are pinned in `blueprints/base/.ssh/kb_known_hosts`, and `blueprints/base/.ssh/config`
+   makes every ssh of the agent to GitHub, the plugin's pushes included, use them and the deploy key.
 2. Make a key pair for the box alone: `ssh-keygen -t ed25519 -N '' -C example-kb -f kb_deploy`.
 3. In the repo's **Settings → Deploy keys**, add `kb_deploy.pub` and tick **Allow write access**.
 4. Run `sops secrets.sops.yaml` and add the private half as a block: a line `KB_DEPLOY_KEY: |`, then every line
    of `kb_deploy`, indented two spaces. Then delete `kb_deploy` and `kb_deploy.pub`.
 5. Add the repo's SSH URL to `box.yaml`: `kb: git@github.com:example/example-kb.git`.
-6. Run `make apply`. It stores the key as a Podman secret of the box user and clones the KB into `/opt/data/kb`.
+6. Run `make apply`. It stores the key as a Podman secret of the box user, restarts a running box so the key is
+   mounted, and clones the KB into `/opt/data/kb`.
 
 A clone GitHub refuses fails `apply` with the repository and git's message; check the deploy key in step 3.
 

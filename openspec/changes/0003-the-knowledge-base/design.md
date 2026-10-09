@@ -101,9 +101,19 @@ PublishPort={{ box_tailnet_ip }}:{{ p }}:{{ p }}
 {% endfor %}
 ```
 
+```
+# blueprints/base/.ssh/config — the hermes user's home is /opt/data, so ssh reads it as ~/.ssh/config
+Host github.com
+  IdentityFile /run/secrets/kb_deploy_key
+  IdentitiesOnly yes
+  StrictHostKeyChecking yes
+  UserKnownHostsFile /opt/data/.ssh/kb_known_hosts
+  GlobalKnownHostsFile /dev/null
+```
+
 | id | decision | because | rejected |
 |---|---|---|---|
-| D5 | the lines above; `blueprints/base/.ssh/kb_known_hosts` holds GitHub's published Ed25519, ECDSA and RSA host keys, whose fingerprints are `SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU` (Ed25519), `SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM` (ECDSA) and `SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s` (RSA); the uid `10000` is the image's `hermes` user, as the sync already assumes (backlog 0002·R10) | git's own variables need no config file; `StrictHostKeyChecking=yes` with a pinned file refuses an unknown host; `.invalid` is a reserved domain no mail reaches | `accept-new` (trust on first use); a `.gitconfig` in the blueprint (Hermes's home is its volume, and the identity is per box) |
+| D5 | the lines above, and the ssh config above in the base blueprint, naming the same key and known-hosts paths as the quadlet; `blueprints/base/.ssh/kb_known_hosts` holds GitHub's published Ed25519, ECDSA and RSA host keys, whose fingerprints are `SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU` (Ed25519), `SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM` (ECDSA) and `SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2s` (RSA); the uid `10000` is the image's `hermes` user, as the sync already assumes (backlog 0002·R10) | `git-hook` replaces `GIT_SSH_COMMAND` with `ssh -oBatchMode=yes` on every pull, commit and push, so the quadlet's variable serves the clone and the ssh config serves every ssh of the agent's user (OpenSSH reads it from the passwd home, `/opt/data` for uid `10000` in the pinned image); `StrictHostKeyChecking=yes` with a pinned file, and no global one, refuses an unknown host; `.invalid` is a reserved domain no mail reaches | `accept-new` (trust on first use); a `.gitconfig` in the blueprint (Hermes's home is its volume, and the identity is per box) |
 
 ### D6 — The tailnet address
 
@@ -115,7 +125,7 @@ PublishPort={{ box_tailnet_ip }}:{{ p }}:{{ p }}
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D7 | after `Start the service`, when `kb` is set, as the box user: `podman exec <name> test -d <blueprint_mount>/kb/.git`, retried until its rc is `0` or `1` (the container may still be starting); on `1`, `podman exec --user 10000 <name> git clone <kb> <blueprint_mount>/kb`, `changed_when: true`, its failure naming the repository and git's stderr | the container already holds the key, the host keys and the identity; the agent's user owns the clone; an existing clone is never touched | cloning on the host through `podman unshare` (the key would sit on the host's command path); `git pull` on apply (`git-hook` owns sync) |
+| D7 | after `Start the service`, a `meta: flush_handlers`, so a running box restarts on its new quadlet and secret before the clone; then, when `kb` is set, as the box user: `podman exec <name> test -d <blueprint_mount>/kb/.git`, retried until its rc is `0` or `1` (the container may still be starting); on `1`, `podman exec --user 10000 <name> git clone <kb> <blueprint_mount>/kb`, `changed_when: true`, its failure naming the repository and git's stderr | the container already holds the key, the host keys and the identity, even on a box that ran before `kb` was set; a failed clone cannot drop the restart; the agent's user owns the clone; an existing clone is never touched | cloning on the host through `podman unshare` (the key would sit on the host's command path); `git pull` on apply (`git-hook` owns sync) |
 
 ### D8 — `git-hook`, vendored
 
@@ -144,8 +154,8 @@ Command: `git show a7303c8:<file> | shasum -a 256` in a clone of the plugin's re
 | file | what it asserts |
 |---|---|
 | `tests/test_box_schema.py` | `kb` accepted when valid, refused as HTTPS; `missing_secrets` names `KB_DEPLOY_KEY` only when `kb` is set; `environment` and `ports` refused when malformed; the Hermes manifest's six names and env list; every KB path in `environment` equals `<blueprint_mount>/kb` |
-| `tests/test_templates.py` | `box.container.j2` renders `Environment="HERMES_DASHBOARD=1"` and `PublishPort=100.64.0.1:9119:9119`; with `kb` it renders the `Secret=` line, `GIT_SSH_COMMAND` with `StrictHostKeyChecking=yes`, and `example@box.invalid`; without `kb` none of them. `test_quadlet_publishes_no_port` is replaced by `test_quadlet_publishes_only_on_the_tailnet_address`: every `PublishPort=` line starts with `box_tailnet_ip` |
-| `tests/test_plays.py` | the secret task has `no_log: true` and passes the key on `stdin`; the clone task is guarded by the `.git` test and runs as `--user 10000` |
+| `tests/test_templates.py` | `box.container.j2` renders `Environment="HERMES_DASHBOARD=1"` and `PublishPort=100.64.0.1:9119:9119`; with `kb` it renders the `Secret=` line, `GIT_SSH_COMMAND` with `StrictHostKeyChecking=yes`, and `example@box.invalid`; without `kb` none of them; `blueprints/base/.ssh/config` pins `github.com` to the quadlet's key and known-hosts paths. `test_quadlet_publishes_no_port` is replaced by `test_quadlet_publishes_only_on_the_tailnet_address`: every `PublishPort=` line starts with `box_tailnet_ip` |
+| `tests/test_plays.py` | the secret task has `no_log: true` and passes the key on `stdin`; the clone task is guarded by the `.git` test and runs as `--user 10000`; handlers flush between `Start the service` and the `.git` test |
 | `tests/test_vendored.py` | the hashes of [D8](#d8), and no other file in the directory |
 | `tests/conftest.py` | `box_tailnet_ip: 100.64.0.1` and the dashboard names in the sample secrets |
 

@@ -58,12 +58,12 @@ Each requirement the deltas touch:
 
 ## Impact
 
-- New: `blueprints/base/plugins/git-hook/`, `blueprints/base/.ssh/kb_known_hosts`, `docs/kb.md`,
-  `tests/test_vendored.py`.
+- New: `blueprints/base/plugins/git-hook/`, `blueprints/base/.ssh/kb_known_hosts`, `blueprints/base/.ssh/config`,
+  `docs/kb.md`, `tests/test_vendored.py`.
 - Edited: `plugins/module_utils/box_schema.py`, `plugins/action/box_load.py`, `runtimes/hermes.yaml`,
   `roles/box/tasks/host.yml`, `roles/box/tasks/box.yml`, `roles/box/templates/box.container.j2`,
   `blueprints/base/config.yaml`, `blueprints/base/SOUL.md`, `examples/box/`, `.ansible-lint`, `galaxy.yml`,
-  `tests/conftest.py`, `tests/test_box_schema.py`, `tests/test_templates.py`, `README.md`,
+  `tests/conftest.py`, `tests/test_box_schema.py`, `tests/test_templates.py`, `tests/test_plays.py`, `README.md`,
   `docs/architecture.md`, `CLAUDE.md`.
 - Dependencies: `hermes-git-hook` vendored at one commit, listed in [design](design.md#dependencies).
 

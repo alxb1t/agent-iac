@@ -84,3 +84,21 @@ def test_clone_check_catches_an_unguarded_clone():
     look = {"ansible.builtin.command": "podman exec example true"}
     clone = {"ansible.builtin.command": {"cmd": "podman exec example git clone x /tmp"}}
     assert clone_faults(look, clone) == ["test", "guard", "user", "target"]
+
+
+def flush_before_clone(path):
+    """Return whether handlers flush after the start and before the KB lookup, e.g. no flush → False."""
+    names = [t.get("name") if "ansible.builtin.meta" not in t else t["ansible.builtin.meta"] for t in tasks(path)]
+    start, look = names.index("Start the service"), names.index("Look for the KB clone")
+    return "flush_handlers" in names[start + 1 : look]
+
+
+# A running box restarts only in a handler, so the clone must not run in the container the old quadlet started.
+def test_the_kb_is_cloned_in_the_container_the_new_quadlet_starts():
+    assert flush_before_clone("roles/box/tasks/box.yml")
+
+
+def test_flush_check_catches_a_clone_before_the_restart(tmp_path):
+    play = [{"name": "Start the service"}, {"name": "Look for the KB clone"}, {"ansible.builtin.meta": "flush_handlers"}]
+    (tmp_path / "box.yml").write_text(yaml.safe_dump(play))
+    assert not flush_before_clone(tmp_path / "box.yml")
