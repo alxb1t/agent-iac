@@ -6,7 +6,7 @@ green gate.
 ## Progress
 
 - [x] 1 — The contracts
-- [ ] 2 — The backup
+- [x] 2 — The backup
 - [ ] 3 — Restore, the drill and status
 - [ ] 4 — The bootstrap
 - [ ] 5 — The example and the docs
@@ -26,12 +26,13 @@ green gate.
 
 ## 2 — The backup
 
-- [ ] 2.1 Apply [D4](design.md#d4) to `roles/box/defaults/main.yml` and `roles/box/tasks/backup.yml`: write `roles/box/templates/rclone.env.j2`,
+- [x] 2.1 Apply [D4](design.md#d4) to `roles/box/defaults/main.yml` and `roles/box/tasks/backup.yml`: write `roles/box/templates/rclone.env.j2`,
       delete `roles/box/templates/restic.env.j2`, write the recipients file, remove `<name>.restic.env`.
-      Verify: `git grep -c restic -- roles/box | wc -l` prints `0` and `test -f roles/box/templates/rclone.env.j2; echo $?` prints `0`.
-- [ ] 2.2 Rewrite `roles/box/templates/box-backup.sh.j2` per [D5](design.md#d5).
+      Verify: `git grep -c restic -- roles/box ':!roles/box/tasks/backup.yml' | wc -l` prints `0`, `grep -c restic roles/box/tasks/backup.yml` prints `2`
+      (the removal's name and path), and `test -f roles/box/templates/rclone.env.j2; echo $?` prints `0`.
+- [x] 2.2 Rewrite `roles/box/templates/box-backup.sh.j2` per [D5](design.md#d5).
       Verify: `grep -c 'rclone rcat' roles/box/templates/box-backup.sh.j2` prints `1` and `grep -c 'systemctl' roles/box/templates/box-backup.sh.j2` prints `0`.
-- [ ] 2.3 Edit `tests/test_templates.py` and `tests/conftest.py` per [D15](design.md#d15): the restic needles and
+- [x] 2.3 Edit `tests/test_templates.py` and `tests/conftest.py` per [D15](design.md#d15): the restic needles and
       tests go, the rclone and keep-five tests come, `RESTIC_PASSWORD` and `box_restic_env` leave the sample vars.
       Verify: `uv run pytest -q tests/test_templates.py` prints `passed` and no `failed`, and `grep -c 'restic' tests/test_templates.py tests/conftest.py | grep -c ':0$'` prints `2`.
 

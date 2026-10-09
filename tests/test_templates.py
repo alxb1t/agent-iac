@@ -24,9 +24,21 @@ NEEDLES = {
         'Environment="GIT_HOOK_ROOTS=/opt/data/kb"',
         "PublishPort=100.64.0.1:9119:9119",
     ],
-    "restic.env.j2": ["RESTIC_REPOSITORY=", "RESTIC_PASSWORD="],
+    "rclone.env.j2": [
+        "RCLONE_CONFIG_R2_TYPE=s3",
+        "RCLONE_CONFIG_R2_PROVIDER=Cloudflare",
+        "RCLONE_CONFIG_R2_ACCESS_KEY_ID=example-r2-access-key-id",
+        "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=example-r2-secret-access-key",
+        "RCLONE_CONFIG_R2_ENDPOINT=https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+        "RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true",
+    ],
     "box-blueprint-sync.sh.j2": ["rsync -a --omit-dir-times --checksum --itemize-changes", "chown -R 10000:10000"],
-    "box-backup.sh.j2": ["trap", "podman unshare restic backup", "systemctl --user -M box@ start example"],
+    "box-backup.sh.j2": [
+        "set -euo pipefail",
+        "podman exec --user 10000 example hermes backup -o /opt/data/backups/agent-iac.zip",
+        "age -R /home/box/.config/agent-iac/example.recipients",
+        "rclone rcat",
+    ],
 }
 
 
@@ -61,9 +73,9 @@ def test_env_file_holds_the_manifest_env_and_nothing_else(render, sample_vars):
     assert render("env.j2").splitlines() == expected
 
 
-def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
-    secrets = {**sample_vars["box_secrets"], "RESTIC_PASSWORD": "a b'c"}
-    assert "RESTIC_PASSWORD='a b'\"'\"'c'" in render("restic.env.j2", box_secrets=secrets)
+def test_rclone_env_quotes_a_secret_for_the_shell(render, sample_vars):
+    secrets = {**sample_vars["box_secrets"], "R2_SECRET_ACCESS_KEY": "a b'c"}
+    assert "R2_SECRET_ACCESS_KEY='a b'\"'\"'c'" in render("rclone.env.j2", box_secrets=secrets)
 
 
 def off_tailnet_ports(text, ip):
@@ -148,13 +160,6 @@ def test_blueprint_sync_names_the_entries_not_the_staging_root(render):
     assert sources and not [s for s in sources if s.endswith("/")]
 
 
-def test_backup_starts_the_box_on_every_exit(render):
-    text = render("box-backup.sh.j2")
-    trap = next(line for line in text.splitlines() if line.startswith("trap "))
-    assert "start example" in trap and trap.endswith(" EXIT")
-    assert text.index("trap ") < text.index("stop example")
-
-
 def stub(bin_dir, name, body=""):
     """Write an executable shell stub, e.g. stub(d, "su") → a `su` that does nothing and exits 0."""
     path = bin_dir / name
@@ -162,25 +167,102 @@ def stub(bin_dir, name, body=""):
     path.chmod(0o755)
 
 
-def run_backup(render, tmp_path, systemctl):
-    bin_dir = tmp_path / "bin"
+# The stubs log each call to $LOG; the container's /opt/data is $DATA.
+BACKUP_STUBS = {
+    "su": 'while [ "$1" != -c ]; do shift; done; exec /bin/bash -c "$2"',
+    "podman": """echo "podman $*" >> "$LOG"
+case "$1" in
+  volume) echo "$DATA";;
+  unshare) shift; exec "$@";;
+  exec) case "$*" in
+    *" rm -f "*) rm -f "$DATA/backups/agent-iac.zip";;
+    *) mkdir -p "$DATA/backups"; echo zip > "$DATA/backups/agent-iac.zip";;
+  esac;;
+esac""",
+    "age": "exec cat",
+    "rclone": """echo "rclone $*" >> "$LOG"
+case "$1" in
+  rcat) cat > "$UPLOAD"; exit "$RCAT_RC";;
+  lsf) printf '%s\\n' $LISTING;;
+  deletefile) exit "$DELETE_RC";;
+esac""",
+    "logger": 'echo "logger $*" >> "$LOG"',
+}
+ARCHIVES = [f"example-202610{d:02d}T040000Z.zip.age" for d in (3, 1, 7, 2, 5, 4, 6)]
+
+
+def run_backup(render, tmp_path, rcat_rc=0, delete_rc=0, edit=lambda text: text):
+    """Run box-backup against the stubs; return its exit code, the calls logged and the volume's zip path."""
+    bin_dir, data = tmp_path / "bin", tmp_path / "data"
     bin_dir.mkdir()
-    stub(bin_dir, "systemctl", systemctl)
-    stub(bin_dir, "su")
-    stub(bin_dir, "logger")
+    data.mkdir()
+    for name, body in BACKUP_STUBS.items():
+        stub(bin_dir, name, body)
+    rclone_env, log, upload = tmp_path / "example.rclone.env", tmp_path / "log", tmp_path / "upload"
+    rclone_env.write_text("")
+    log.write_text("")
     script = tmp_path / "box-backup"
-    script.write_text(render("box-backup.sh.j2"))
-    env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
-    return subprocess.run(["sh", str(script), "example"], env=env, capture_output=True, check=False)
+    script.write_text(edit(render("box-backup.sh.j2", box_rclone_env=str(rclone_env))))
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "LOG": str(log),
+        "DATA": str(data),
+        "UPLOAD": str(upload),
+        "LISTING": " ".join(ARCHIVES),
+        "RCAT_RC": str(rcat_rc),
+        "DELETE_RC": str(delete_rc),
+    }
+    code = subprocess.run(["bash", str(script), "example"], env=env, capture_output=True, check=False).returncode
+    return code, log.read_text().splitlines(), data / "backups" / "agent-iac.zip"
 
 
-def test_backup_exits_zero_when_every_step_succeeds(render, tmp_path):
-    assert run_backup(render, tmp_path, "").returncode == 0
+def calls(log, prefix):
+    """Return the logged calls starting with prefix, e.g. "rclone deletefile" → each delete's line."""
+    return [line for line in log if line.startswith(prefix)]
 
 
-# A backup that leaves the agent stopped must not read as a success to the playbook or cron.
-def test_backup_fails_when_the_start_fails(render, tmp_path):
-    assert run_backup(render, tmp_path, 'case "$*" in *" start "*) exit 1;; esac').returncode != 0
+def test_backup_uploads_the_encrypted_archive_and_keeps_five(render, tmp_path):
+    code, log, zip_path = run_backup(render, tmp_path)
+    assert code == 0
+    assert (tmp_path / "upload").read_text() == "zip\n"
+    [rcat] = calls(log, "rclone rcat ")
+    assert re.fullmatch(r"rclone rcat r2:example-backups/example-\d{8}T\d{6}Z\.zip\.age", rcat)
+    assert calls(log, "rclone lsf ") == ["rclone lsf --files-only --include example-*.zip.age r2:example-backups"]
+    assert sorted(calls(log, "rclone deletefile ")) == [
+        "rclone deletefile r2:example-backups/example-20261001T040000Z.zip.age",
+        "rclone deletefile r2:example-backups/example-20261002T040000Z.zip.age",
+    ]
+    assert calls(log, "logger ") == []
+    assert not zip_path.exists()
+
+
+# A locked archive is the lock working, not a failed backup.
+def test_a_refused_delete_warns_and_exits_zero(render, tmp_path):
+    code, log, _ = run_backup(render, tmp_path, delete_rc=1)
+    assert code == 0
+    assert len(calls(log, "logger -p user.warning ")) == 2
+    assert calls(log, "logger -p user.err ") == []
+
+
+def test_a_failed_upload_fails_logs_and_removes_the_zip(render, tmp_path):
+    code, log, zip_path = run_backup(render, tmp_path, rcat_rc=1)
+    assert code != 0
+    assert len(calls(log, "logger -p user.err ")) == 1
+    assert calls(log, "rclone deletefile ") == []
+    assert not zip_path.exists()
+
+
+def test_zip_check_catches_a_dropped_trap(render, tmp_path):
+    def drop_trap(text):
+        return "\n".join(line for line in text.splitlines() if not line.startswith("trap "))
+
+    _, _, zip_path = run_backup(render, tmp_path, rcat_rc=1, edit=drop_trap)
+    assert zip_path.exists()
+
+
+# hermes backup copies the database safely while the gateway runs: 0004-the-handover design D5.
+def test_backup_never_stops_the_service(render):
+    assert "systemctl" not in render("box-backup.sh.j2")
 
 
 # Tailscale keeps its own chains in other tables; the ruleset replaces only the table it owns.

@@ -2,13 +2,18 @@
 box_user: box
 box_home: "/home/{{ box_user }}"
 box_config: "{{ box_home }}/.config/agent-iac"
-box_restic_env: "{{ box_config }}/{{ box.name }}.restic.env"
+box_rclone_env: "{{ box_config }}/{{ box.name }}.rclone.env"
+box_recipients_file: "{{ box_config }}/{{ box.name }}.recipients"
+# box.yaml's backup is r2:<account-id>/<bucket>.
+box_r2_account: "{{ box.backup.split(':', 1)[1].split('/', 1)[0] }}"
+box_r2_bucket: "{{ box.backup.split('/', 1)[1] }}"
 box_tailscale_key: /run/box-tailscale-auth-key
 box_packages:
   - podman
   - crun
   - rsync
-  - restic
+  - age
+  - rclone
   - nftables
   - unattended-upgrades
   - tailscale

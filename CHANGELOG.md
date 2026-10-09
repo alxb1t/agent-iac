@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The runtime manifest has eight fields: `backup` and `restore` join it, each a command line holding `{archive}` once, so a runtime declares how it archives and restores itself. `box.yaml`'s `backup` is an R2 bucket, `r2:<account-id>/<bucket>`; the R2 key pair replaces `RESTIC_PASSWORD` among the required secrets.
 - `box_load` reads the age recipients of `.sops.yaml` beside `box.yaml` and refuses a file naming none, so the archives go to the same keys as the secrets.
+- The nightly backup no longer stops the agent: `box-backup` runs the manifest's `backup` in the container, pipes the zip through `age` to the recipients and `rclone rcat`s it to R2, then keeps the newest five; a delete the bucket's lock refuses is a warning, not a failure.
+- The host carries `age` and `rclone` instead of `restic`; `apply` writes the rclone env and the recipients, and removes the restic env file with its password.
 
 ## [0.3.0] - 2026-10-09
 
