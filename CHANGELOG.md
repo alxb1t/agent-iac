@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `box.yaml` takes an optional `kb:`, a GitHub SSH URL; with it, `KB_DEPLOY_KEY` is a required secret, so a KB without its key is refused before any connection.
+- The quadlet sets the manifest's environment and publishes its ports on the host's tailnet address only, read by `tailscale ip -4` at each apply. With `kb:` it mounts the deploy key as a Podman secret, and git trusts only GitHub's host keys, pinned in `blueprints/base/.ssh/kb_known_hosts`, and commits under the box's name.
 
 ### Changed
 

@@ -42,6 +42,7 @@ def sample_vars(hermes):
         "box_user": "box",
         "box_config": "/home/box/.config/agent-iac",
         "box_restic_env": "/home/box/.config/agent-iac/example.restic.env",
+        "box_tailnet_ip": "100.64.0.1",
     }
 
 

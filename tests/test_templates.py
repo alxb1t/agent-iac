@@ -19,6 +19,9 @@ NEEDLES = {
         "Exec=gateway run",
         "AutoUpdate=none",
         "Restart=always",
+        'Environment="HERMES_DASHBOARD=1"',
+        'Environment="GIT_HOOK_ROOTS=/opt/data/kb"',
+        "PublishPort=100.64.0.1:9119:9119",
     ],
     "restic.env.j2": ["RESTIC_REPOSITORY=", "RESTIC_PASSWORD="],
     "box-blueprint-sync.sh.j2": ["rsync -a --omit-dir-times --checksum --itemize-changes", "chown -R 10000:10000"],
@@ -62,8 +65,43 @@ def test_restic_env_quotes_a_password_for_the_shell(render, sample_vars):
     assert "RESTIC_PASSWORD='a b'\"'\"'c'" in render("restic.env.j2", box_secrets=secrets)
 
 
-def test_quadlet_publishes_no_port(render):
-    assert "PublishPort" not in render("box.container.j2")
+def off_tailnet_ports(text, ip):
+    """Return the PublishPort= lines not bound to ip, e.g. "PublishPort=9119:9119" → that line."""
+    lines = [line for line in text.splitlines() if line.startswith("PublishPort=")]
+    return [line for line in lines if not line.startswith(f"PublishPort={ip}:")]
+
+
+def test_quadlet_publishes_only_on_the_tailnet_address(render, sample_vars):
+    text = render("box.container.j2")
+    assert "PublishPort=" in text
+    assert off_tailnet_ports(text, sample_vars["box_tailnet_ip"]) == []
+
+
+def test_tailnet_check_catches_a_port_on_every_address(render, sample_vars):
+    text = render("box.container.j2") + "PublishPort=9119:9119\n"
+    assert off_tailnet_ports(text, sample_vars["box_tailnet_ip"]) == ["PublishPort=9119:9119"]
+
+
+KB = "git@github.com:example/example-kb.git"
+KB_LINES = [
+    "Secret=example-kb-deploy-key,type=mount,target=/run/secrets/kb_deploy_key,uid=10000,gid=10000,mode=0400",
+    "StrictHostKeyChecking=yes",
+    "UserKnownHostsFile=/opt/data/.ssh/kb_known_hosts",
+    'Environment="GIT_AUTHOR_EMAIL=example@box.invalid"',
+    'Environment="GIT_COMMITTER_EMAIL=example@box.invalid"',
+]
+
+
+def test_quadlet_with_kb_mounts_the_key_and_names_the_box(render, sample_vars):
+    text = render("box.container.j2", box={**sample_vars["box"], "kb": KB})
+    assert missing(text, KB_LINES) == []
+    assert "KB_DEPLOY_KEY" not in text
+
+
+def test_quadlet_without_kb_has_no_kb_line(render):
+    text = render("box.container.j2")
+    assert [line for line in KB_LINES if line in text] == []
+    assert "GIT_SSH_COMMAND" not in text
 
 
 # A source ending in "/" carries its own mode and time onto the volume root, which the agent writes into.

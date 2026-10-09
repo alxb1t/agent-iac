@@ -6,7 +6,7 @@ base blueprint, the example and the docs. Each ends on a green gate.
 ## Progress
 
 - [x] 1 — The contracts
-- [ ] 2 — The quadlet and the tailnet address
+- [x] 2 — The quadlet and the tailnet address
 - [ ] 3 — The deploy key and the clone
 - [ ] 4 — The plugin and the base blueprint
 - [ ] 5 — The example and the docs
@@ -26,14 +26,14 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## 2 — The quadlet and the tailnet address
 
-- [ ] 2.1 Add the tailnet-address read of [D6](design.md#d6) to `roles/box/tasks/host.yml`, after the wait for the
+- [x] 2.1 Add the tailnet-address read of [D6](design.md#d6) to `roles/box/tasks/host.yml`, after the wait for the
       tailnet. Verify: `grep -c 'tailscale ip -4' roles/box/tasks/host.yml` prints `1`.
-- [ ] 2.2 Add the lines of [D5](design.md#d5) to `roles/box/templates/box.container.j2`, after `EnvironmentFile=`.
+- [x] 2.2 Add the lines of [D5](design.md#d5) to `roles/box/templates/box.container.j2`, after `EnvironmentFile=`.
       Verify: `grep -c 'StrictHostKeyChecking=yes' roles/box/templates/box.container.j2` prints `1`.
-- [ ] 2.3 Write `blueprints/base/.ssh/kb_known_hosts`: GitHub's Ed25519, ECDSA and RSA host keys, one `github.com` line each.
+- [x] 2.3 Write `blueprints/base/.ssh/kb_known_hosts`: GitHub's Ed25519, ECDSA and RSA host keys, one `github.com` line each.
       Verify: `ssh-keygen -lf blueprints/base/.ssh/kb_known_hosts | awk '{print $2}' | sort` prints the three
       fingerprints of [D5](design.md#d5), sorted.
-- [ ] 2.4 Edit `tests/conftest.py` and `tests/test_templates.py` per [D10](design.md#d10), replacing `test_quadlet_publishes_no_port`.
+- [x] 2.4 Edit `tests/conftest.py` and `tests/test_templates.py` per [D10](design.md#d10), replacing `test_quadlet_publishes_no_port`.
       Verify: `uv run pytest -q tests/test_templates.py` prints `passed` and no `failed`, and
       `grep -c 'def test_quadlet_publishes_no_port' tests/test_templates.py` prints `0`.
 

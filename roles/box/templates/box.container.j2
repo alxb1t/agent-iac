@@ -7,6 +7,20 @@ ContainerName={{ box.name }}
 Image={{ manifest.image }}:{{ box.version }}
 Volume={{ box.name }}-data:{{ manifest.blueprint_mount }}
 EnvironmentFile={{ box_config }}/{{ box.name }}.env
+{% for k, v in manifest.environment.items() %}
+Environment="{{ k }}={{ v }}"
+{% endfor %}
+{% if box.kb is defined %}
+Secret={{ box.name }}-kb-deploy-key,type=mount,target=/run/secrets/kb_deploy_key,uid=10000,gid=10000,mode=0400
+Environment="GIT_SSH_COMMAND=ssh -i /run/secrets/kb_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile={{ manifest.blueprint_mount }}/.ssh/kb_known_hosts"
+Environment="GIT_AUTHOR_NAME={{ box.name }}"
+Environment="GIT_AUTHOR_EMAIL={{ box.name }}@box.invalid"
+Environment="GIT_COMMITTER_NAME={{ box.name }}"
+Environment="GIT_COMMITTER_EMAIL={{ box.name }}@box.invalid"
+{% endif %}
+{% for p in manifest.ports %}
+PublishPort={{ box_tailnet_ip }}:{{ p }}:{{ p }}
+{% endfor %}
 Exec=gateway run
 AutoUpdate=none
 
