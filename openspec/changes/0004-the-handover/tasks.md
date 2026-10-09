@@ -8,7 +8,7 @@ green gate.
 - [x] 1 — The contracts
 - [x] 2 — The backup
 - [x] 3 — Restore, the drill and status
-- [ ] 4 — The bootstrap
+- [x] 4 — The bootstrap
 - [ ] 5 — The example and the docs
 
 ## 1 — The contracts
@@ -50,10 +50,10 @@ green gate.
 
 ## 4 — The bootstrap
 
-- [ ] 4.1 Edit `contrib/bootstrap-pi.sh` per [D12](design.md#d12).
+- [x] 4.1 Edit `contrib/bootstrap-pi.sh` per [D12](design.md#d12).
       Verify: `grep -c 'key=\$1' contrib/bootstrap-pi.sh` prints `0`, `grep -c '/dev/tty' contrib/bootstrap-pi.sh` prints a number above `0`,
       and `sh contrib/bootstrap-pi.sh; echo $?` prints usage then `1`.
-- [ ] 4.2 Write `tests/test_bootstrap.py` per [D15](design.md#d15).
+- [x] 4.2 Write `tests/test_bootstrap.py` per [D15](design.md#d15).
       Verify: `uv run pytest -q tests/test_bootstrap.py` prints `passed` and no `failed`.
 
 ## 5 — The example and the docs

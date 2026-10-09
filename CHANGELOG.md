@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The host carries `age` and `rclone` instead of `restic`; `apply` writes the rclone env and the recipients, and removes the restic env file with its password.
 - `restore` and `restore-drill` fetch and decrypt the archive on the machine running `make`, so the box never holds a private key. `restore` stops the service, imports the archive in a one-off container and starts it again on every exit; with `kb:`, it then clones the KB afresh through the role's new `kb.yml`. `-e box_archive=<file>` picks an archive.
 - `restore-drill` imports into a scratch volume and checks `state.db`'s integrity, its `sessions` table and `config.yaml`, printing the session count, instead of diffing against a live state that has moved on. `status`'s third line names the newest archive.
+- `bootstrap-pi.sh` takes only the operator's SSH public key and reads the Tailscale auth key from the terminal without echo, so the key is on no command line and `curl … | sudo sh -s -- "<key>"` still works. Tailscale's signing key downloads to a temporary file and reaches the keyring path only after its hash checks.
 
 ## [0.3.0] - 2026-10-09
 
