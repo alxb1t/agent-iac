@@ -9,7 +9,7 @@ base blueprint, the example and the docs. Each ends on a green gate.
 - [x] 2 — The quadlet and the tailnet address
 - [x] 3 — The deploy key and the clone
 - [x] 4 — The plugin and the base blueprint
-- [ ] 5 — The example and the docs
+- [x] 5 — The example and the docs
 
 ## 1 — The contracts
 
@@ -62,14 +62,14 @@ base blueprint, the example and the docs. Each ends on a green gate.
 
 ## 5 — The example and the docs
 
-- [ ] 5.1 Apply [D12](design.md#d12) to `galaxy.yml`, `examples/box/requirements.yml`, `examples/box/box.yaml`, and
+- [x] 5.1 Apply [D12](design.md#d12) to `galaxy.yml`, `examples/box/requirements.yml`, `examples/box/box.yaml`, and
       re-encrypt `examples/box/secrets.sops.yaml` with `SOPS_AGE_KEY_FILE=tests/keys/example.age`.
       Verify: `grep -c '^version: 0.3.0' galaxy.yml` prints `1` and `grep -c '^[A-Z_]*: ENC\[' examples/box/secrets.sops.yaml` prints `9`.
-- [ ] 5.2 Write `docs/kb.md` per [D11](design.md#d11).
+- [x] 5.2 Write `docs/kb.md` per [D11](design.md#d11).
       Verify: `grep -c 'kb_deploy.pub' docs/kb.md` prints a number above `0` and `grep -c ':9119' docs/kb.md` prints a number above `0`.
-- [ ] 5.3 Edit `README.md`, `docs/architecture.md` and `CLAUDE.md` per [D11](design.md#d11).
+- [x] 5.3 Edit `README.md`, `docs/architecture.md` and `CLAUDE.md` per [D11](design.md#d11).
       Verify: `grep -c 'four-field' CLAUDE.md docs/architecture.md | grep -c ':0$'` prints `2`,
       `grep -c 'six-field manifest' CLAUDE.md` prints `1` and `grep -c 'docs/kb.md' README.md` prints `1`.
-- [ ] 5.4 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
+- [x] 5.4 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
       Verify: `grep -rl '/Users/' $P | wc -l` prints `0`, and `test -s .minions/refused-names && { grep -rli -f .minions/refused-names $P; echo "exit=$?"; }`
       prints only `exit=1`; a missing or empty `.minions/refused-names` prints nothing and fails.

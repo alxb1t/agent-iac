@@ -12,11 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `box.yaml` takes an optional `kb:`, a GitHub SSH URL; with it, `KB_DEPLOY_KEY` is a required secret, so a KB without its key is refused before any connection.
 - The quadlet sets the manifest's environment and publishes its ports on the host's tailnet address only, read by `tailscale ip -4` at each apply. With `kb:` it mounts the deploy key as a Podman secret, and git trusts only GitHub's host keys, pinned in `blueprints/base/.ssh/kb_known_hosts`, and commits under the box's name.
 - With `kb:`, `apply` stores the deploy key as the box user's Podman secret, replaced only when its hash changes, and clones the KB into `/opt/data/kb` as the agent's user once; an existing clone is never touched.
+- `docs/kb.md`: the operator's KB repo and deploy key, the client's Obsidian, and Hermes Desktop on `<target>:9119`.
 - The base blueprint vendors the `git-hook` Hermes plugin at `a7303c8` and enables it, so the agent's KB edits are pushed each turn; `tests/test_vendored.py` pins every file by hash. The base `SOUL.md` names the KB.
 
 ### Changed
 
 - The runtime manifest has six fields: `environment` and `ports` join it, so a runtime declares its fixed variables and ports. The Hermes manifest sets the KB paths and the dashboard, and requires the dashboard login.
+- The collection is `0.3.0`; the example pins `v0.3.0`, sets `kb:` and holds every secret it now needs. `README.md`, `docs/architecture.md` and `CLAUDE.md` say six fields, `kb:` and the dashboard.
 
 ## [0.2.0] - 2026-10-08
 

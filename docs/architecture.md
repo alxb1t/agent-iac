@@ -57,8 +57,9 @@ The container's libc is not a boundary. The host is.
 
 This section decides what an agent declares to the box, and nothing more.
 
-A **runtime** is declared by a manifest: `image · state · env · blueprint_mount`. The
-image tag comes from `box.yaml`'s `version`. agent-iac never parses the agent's own config. The agent never knows
+A **runtime** is declared by a manifest of six fields: `image · state · env · blueprint_mount · environment · ports`.
+The image tag comes from `box.yaml`'s `version`. `environment` holds fixed variables that are not secret; `ports` are
+published on the host's tailnet address only. agent-iac never parses the agent's own config. The agent never knows
 agent-iac exists.
 
 ```yaml
@@ -71,15 +72,25 @@ env:                                           # the secret names the runtime re
   - TELEGRAM_BOT_TOKEN
   - TELEGRAM_ALLOWED_USERS
   - OPENROUTER_API_KEY
+  - HERMES_DASHBOARD_BASIC_AUTH_USERNAME       # the dashboard login, required on every Hermes box
+  - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH
+  - HERMES_DASHBOARD_BASIC_AUTH_SECRET
 blueprint_mount: /opt/data                     # where the blueprint's files are copied before start
+environment:                                   # fixed variables, set on the container
+  HERMES_DASHBOARD: "1"
+  WIKI_PATH: /opt/data/kb                      # the KB, cloned to <blueprint_mount>/kb
+  OBSIDIAN_VAULT_PATH: /opt/data/kb
+  GIT_HOOK_ROOTS: /opt/data/kb
+ports:                                         # published on the tailnet address only
+  - 9119
 ```
 
 ## box.yaml
 
 This section decides what a deployment declares.
 
-A deployment is one `box.yaml`: `name · target · runtime · version · backup`. Nothing in it is
-runtime-specific. A model choice, an allowlist of users or a cron line is the agent's setting and lives in the
+A deployment is one `box.yaml`: `name · target · runtime · version · backup`, and an optional `kb`. Nothing in
+it is runtime-specific. A model choice, an allowlist of users or a cron line is the agent's setting and lives in the
 **blueprint**. `tier` and `egress` arrive with the fence.
 
 ```yaml
@@ -89,6 +100,7 @@ target: example.tailnet.example       # the host, as SSH reaches it
 runtime: hermes                       # names runtimes/hermes.yaml
 version: v2026.10.1                   # the pinned image tag
 backup: sftp:user@mac:/backups/example   # a restic repository URL; a bucket later
+kb: git@github.com:example/example-kb.git  # optional: the knowledge base, a GitHub SSH URL
 ```
 
 ## Secrets and backups
@@ -99,7 +111,8 @@ This section decides how a secret reaches the box, and how a backup is proven.
 - `secrets.sops.yaml` sits in the deployment repo. Keys are readable; values are encrypted to the operator's age
   public key.
 - At apply, Ansible decrypts on the operator's machine and writes a `0600` env file for the box user.
-- The age private key never leaves the operator's machine. The agent reads only its own env.
+- The age private key never leaves the operator's machine. The agent reads only its own env and, with a `kb`,
+  its deploy key.
 
 **Backups: restic.**
 - At 04:00, cron stops the box, restic snapshots its state volume, and the box starts again: stop, snapshot,
@@ -135,8 +148,14 @@ This section decides what lives in which repo, and how knowledge reaches the cli
   over it, whole file, no merge.
 
 **Knowledge base through git.**
-- The agent commits and pushes every write.
+- `kb` in `box.yaml` names a private GitHub repo. `apply` clones it once into `/opt/data/kb`.
+- Its **deploy key** is the box user's Podman secret, mounted into the container as a file; git trusts only
+  GitHub's host keys, pinned in the base blueprint.
+- The `git-hook` plugin, vendored at a pinned commit into `blueprints/base/`, commits and pushes every write under
+  the box's name.
 - Obsidian's Git plugin pulls on the client's Mac.
+- Hermes Desktop reaches the agent's dashboard on port 9119 of the box's tailnet address, behind its login.
+- The operator's and the client's steps: [knowledge base](kb.md).
 
 A fix is a one-line bump in each repo. The client can leave on a public tag. Git conflicts are visible; sync
 conflicts are not.
