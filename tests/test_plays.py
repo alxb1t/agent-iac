@@ -153,7 +153,7 @@ def short_tmp():
     shutil.rmtree(path)
 
 
-def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True):
+def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True, extra_vars=None):
     """Run fetch.yml on this machine against the stubs; return ansible-playbook's exit code, its output, the calls."""
     bin_dir, home, log = tmp_path / "bin", tmp_path / "home", tmp_path / "log"
     for d in (bin_dir, home):
@@ -162,7 +162,7 @@ def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True)
         (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
         (bin_dir / name).chmod(0o755)
     log.write_text("")
-    (tmp_path / "vars.json").write_text(json.dumps(sample_vars))
+    (tmp_path / "vars.json").write_text(json.dumps({**sample_vars, **(extra_vars or {})}))
     play = [{"hosts": "localhost", "gather_facts": False, "tasks": [{"ansible.builtin.import_tasks": str(ROOT / FETCH)}]}]
     (tmp_path / "fetch.yml").write_text(yaml.safe_dump(play))
     env = {k: v for k, v in os.environ.items() if k != "SOPS_AGE_KEY_FILE"}
@@ -200,6 +200,51 @@ def test_fetch_refuses_an_archive_dated_in_the_future(sample_vars, tmp_path, sho
     assert code != 0
     assert "example-99991231T000000Z.zip.age is dated in the future" in out
     assert [line for line in log if not line.startswith("rclone lsf ")] == []
+
+
+# A hand-installed Hermes's zip is copied as is: no bucket, no identity, and the file stays where it was.
+def test_fetch_copies_a_local_zip_and_leaves_it(sample_vars, tmp_path, short_tmp):
+    zip_file = tmp_path / "migrate.zip"
+    zip_file.write_bytes(b"example zip")
+    extra = {"box_archive_file": str(zip_file)}
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, identity=False, extra_vars=extra)
+    assert code == 0, out
+    assert "archive: migrate.zip" in out
+    assert log == []
+    assert zip_file.read_bytes() == b"example zip"
+    [folder] = short_tmp.glob("agent-iac-restore-*")
+    assert (folder / "restore.zip").read_bytes() == b"example zip"
+
+
+def test_fetch_decrypts_a_local_age_archive_without_the_bucket(sample_vars, tmp_path, short_tmp):
+    archive = tmp_path / "migrate.zip.age"
+    archive.write_bytes(b"example archive")
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, extra_vars={"box_archive_file": str(archive)})
+    assert code == 0, out
+    [age] = log
+    assert age.startswith("age -d ") and age.endswith(f" {archive}")
+    assert archive.exists()
+
+
+# Each refusal names its problem and stops before the private folder is made.
+@pytest.mark.parametrize(
+    ("extra", "problem"),
+    [
+        ({"box_archive_file": "{tmp}/migrate.tar"}, "is not a .zip or a .zip.age"),
+        ({"box_archive_file": "migrate.zip"}, "is not an absolute path"),
+        ({"box_archive_file": "{tmp}/missing.zip"}, "is not a file"),
+        ({"box_archive_file": "{tmp}/migrate.zip", "box_archive": ARCHIVES[0]}, "not both"),
+    ],
+)
+def test_fetch_refuses_a_bad_local_archive(sample_vars, tmp_path, short_tmp, extra, problem):
+    for name in ("migrate.tar", "migrate.zip"):
+        (tmp_path / name).write_bytes(b"example")
+    extra = {k: v.format(tmp=tmp_path) for k, v in extra.items()}
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, extra_vars=extra)
+    assert code != 0
+    assert problem in out
+    assert "TASK [Make the private folder]" not in out
+    assert log == []
 
 
 # The files the v0.3 backup wrote for its SFTP host: 0002-the-box design D11 and D12; 0004-the-handover review R10.

@@ -4,15 +4,15 @@ The phases: the fetch, the restore and the target, the docs. Each ends on a gree
 
 ## Progress
 
-- [ ] 1 — The fetch
+- [x] 1 — The fetch
 - [ ] 2 — The restore and the target
 - [ ] 3 — The docs
 
 ## 1 — The fetch
 
-- [ ] 1.1 Add the local-archive branch of [D1](design.md#d1) to `roles/box/tasks/fetch.yml`.
+- [x] 1.1 Add the local-archive branch of [D1](design.md#d1) to `roles/box/tasks/fetch.yml`.
       Verify: `grep -c 'box_archive_file' roles/box/tasks/fetch.yml` prints a number above `2`.
-- [ ] 1.2 Extend `tests/test_plays.py` per [D6](design.md#d6): `run_fetch` takes extra vars, and the local-archive
+- [x] 1.2 Extend `tests/test_plays.py` per [D6](design.md#d6): `run_fetch` takes extra vars, and the local-archive
       fetch cases. Verify: `uv run pytest -q tests/test_plays.py` prints `passed` and no `failed`, and
       `grep -c 'box_archive_file' tests/test_plays.py` prints a number above `0`.
 
