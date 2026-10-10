@@ -9,7 +9,7 @@ operator does section 1 once per box; the client does sections 2 and 3 on their 
 ```
 
 The box clones the KB once, at the first `make apply` with `kb:` set; it never pulls or resets it after, except
-`make restore`, which deletes `/opt/data/kb` and clones it afresh from the remote: a file the agent wrote but never
+`make restore` and `make migrate`, which delete `/opt/data/kb` and clone it afresh from the remote: a file the agent wrote but never
 pushed is not restored from the archive. The `git-hook` plugin pulls before the agent reads and pushes the files each turn changed, under the box's name: for the
 box `example`, `example <example@box.invalid>`. Where the KB sits among the repos: [architecture](architecture.md).
 
