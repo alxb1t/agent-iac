@@ -30,7 +30,8 @@ deployment is a small private repo that pins it. How it is built: [architecture]
 5. **Apply.** Run `make apply`.
 
 After that: `make status`, `make backup`, `make restore-drill`, and `make restore` to bring the box back: the
-example's [RESTORE.md](examples/box/RESTORE.md).
+example's [RESTORE.md](examples/box/RESTORE.md). `make migrate ZIP=<path>` restores a local archive instead, e.g. a
+hand-installed Hermes's `hermes backup` zip: section 7 of the [host checklist](docs/host.md).
 
 ## What you need
 

@@ -6,7 +6,7 @@ The phases: the fetch, the restore and the target, the docs. Each ends on a gree
 
 - [x] 1 — The fetch
 - [x] 2 — The restore and the target
-- [ ] 3 — The docs
+- [x] 3 — The docs
 
 ## 1 — The fetch
 
@@ -27,10 +27,10 @@ The phases: the fetch, the restore and the target, the docs. Each ends on a gree
 
 ## 3 — The docs
 
-- [ ] 3.1 Write *7 — Migrating a hand-installed Hermes* in `docs/host.md` and the `examples/box/RESTORE.md` line per [D4](design.md#d4).
+- [x] 3.1 Write *7 — Migrating a hand-installed Hermes* in `docs/host.md` and the `examples/box/RESTORE.md` line per [D4](design.md#d4).
       Verify: `grep -c 'make migrate ZIP=' docs/host.md` prints a number above `0` and `grep -c 'make migrate' examples/box/RESTORE.md` prints a number above `0`.
-- [ ] 3.2 Edit `README.md` and `docs/architecture.md` per [D4](design.md#d4), and apply [D5](design.md#d5) to `galaxy.yml` and `examples/box/requirements.yml`.
+- [x] 3.2 Edit `README.md` and `docs/architecture.md` per [D4](design.md#d4), and apply [D5](design.md#d5) to `galaxy.yml` and `examples/box/requirements.yml`.
       Verify: `grep -c 'make migrate' README.md` prints a number above `0` and `grep -c '^version: 0.5.0' galaxy.yml` prints `1`.
-- [ ] 3.3 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
+- [x] 3.3 **HALT CHECK** No name, client, vault or machine path anywhere new. `P` = `roles playbooks plugins runtimes blueprints examples contrib docs README.md`.
       Verify: `git grep --untracked -l '/Users/' -- $P | wc -l` prints `0`, and `test -s .minions/refused-names && { git grep --untracked -li -f .minions/refused-names -- $P; echo "exit=$?"; }`
       prints only `exit=1`; a missing or empty `.minions/refused-names` prints nothing and fails.

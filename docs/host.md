@@ -109,3 +109,18 @@ That tailnet name is the `target` in `box.yaml`. The host exists; the holder is 
    export XDG_RUNTIME_DIR=/run/user/$(id -u)
    podman exec -it <name> hermes auth add <provider>
    ```
+
+## 7 — Migrating a hand-installed Hermes
+
+When the box replaces a Hermes installed by hand, its state moves in after section 6, through `restore`. Provider
+logins come with it; the old `.env` does not.
+
+1. Move every value of the old install's `.env` into `secrets.sops.yaml`: `sops secrets.sops.yaml`. The box removes
+   the imported `.env`, so a value left out is lost.
+2. On the old machine, `hermes update` an install much older than the box's `version`.
+3. On the old machine, `hermes backup -o migrate.zip`. Then stop the old install's gateway: a bot token is polled by
+   one gateway at a time.
+4. Copy `migrate.zip` to the operator's machine, e.g. `scp <old machine>:migrate.zip .`.
+5. In the deployment repo, run `make migrate ZIP=migrate.zip`. It copies the zip to the box, imports it, removes its
+   `.env` and starts the agent. The zip itself stays where it was.
+6. Delete `migrate.zip` on both machines: it holds the old install's secrets in clear.
