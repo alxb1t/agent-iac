@@ -18,7 +18,8 @@
         tasks_from: user_env.yml
 
 # The box holds public keys only, so the archive is decrypted here: 0004-the-handover design D7.
-# The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age.
+# The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age, or take a local one with
+# -e box_archive_file=<absolute path>.
 - name: Fetch and decrypt the archive
   hosts: localhost
   gather_facts: false
@@ -73,7 +74,15 @@
             podman volume inspect --format {% raw %}'{{ .Mountpoint }}'{% endraw %} {{ box.name }}-data
           register: box_volume
           changed_when: false
-          when: box.kb is defined
+          when: box.kb is defined or box_archive_file is defined
+
+        # The old install's .env would shadow the sops secrets; Hermes seeds a template at the next start.
+        # Why: 0005-the-migration design D2.
+        - name: Remove the old install's env
+          ansible.builtin.command:
+            argv: [podman, unshare, rm, -f, "{{ box_volume.stdout }}/.env"]
+          changed_when: true
+          when: box_archive_file is defined
 
         # The archive's kb/ has no .git, and the clone runs only into an empty folder.
         - name: Remove the archive's KB

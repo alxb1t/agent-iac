@@ -91,6 +91,34 @@ def test_restore_replaces_the_kb_only_with_kb():
     assert names(steps).index(RESTORE_BLOCK) < steps.index(clone)
 
 
+# An imported .env would shadow the sops secrets; a box's own .env holds keys `hermes auth add` wrote.
+# Why: 0005-the-migration design D2.
+def test_restore_drops_the_env_of_a_local_import_only():
+    steps = names(task("playbooks/restore.yml", RESTORE_BLOCK)["block"])
+    rm, read = (task("playbooks/restore.yml", n) for n in ("Remove the old install's env", "Read the volume's path"))
+    assert rm["when"] == "box_archive_file is defined"
+    assert argv(rm) == ["podman", "unshare", "rm", "-f", "{{ box_volume.stdout }}/.env"]
+    assert steps.index("Import the archive") < steps.index(read["name"]) < steps.index(rm["name"])
+    assert read["when"] == "box.kb is defined or box_archive_file is defined"
+
+
+EXAMPLE = ROOT / "examples" / "box"
+
+
+# `make restore -e …` hands -e to make, not Ansible; abspath makes a relative ZIP safe: 0005-the-migration design D3.
+def test_make_migrate_restores_the_zip_by_its_absolute_path():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate", "ZIP=migrate.zip"], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert f"-e box_archive_file={EXAMPLE / 'migrate.zip'}" in done.stdout
+    assert "alxb1t.agent_iac.restore" in done.stdout
+
+
+def test_make_migrate_without_a_zip_says_how():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate"], capture_output=True, text=True)
+    assert done.returncode != 0
+    assert "usage: make migrate ZIP=<path to the zip>" in done.stderr
+
+
 FETCH = "roles/box/tasks/fetch.yml"
 
 

@@ -5,7 +5,7 @@ The phases: the fetch, the restore and the target, the docs. Each ends on a gree
 ## Progress
 
 - [x] 1 — The fetch
-- [ ] 2 — The restore and the target
+- [x] 2 — The restore and the target
 - [ ] 3 — The docs
 
 ## 1 — The fetch
@@ -18,11 +18,11 @@ The phases: the fetch, the restore and the target, the docs. Each ends on a gree
 
 ## 2 — The restore and the target
 
-- [ ] 2.1 Add *Remove the old install's env* to `playbooks/restore.yml` per [D2](design.md#d2).
+- [x] 2.1 Add *Remove the old install's env* to `playbooks/restore.yml` per [D2](design.md#d2).
       Verify: `grep -c "Remove the old install's env" playbooks/restore.yml` prints `1`.
-- [ ] 2.2 Add the `migrate` line of [D3](design.md#d3) to `examples/box/Makefile`.
+- [x] 2.2 Add the `migrate` line of [D3](design.md#d3) to `examples/box/Makefile`.
       Verify: `grep -c 'box_archive_file=$(abspath $(ZIP))' examples/box/Makefile` prints `1`.
-- [ ] 2.3 Extend `tests/test_plays.py` per [D6](design.md#d6): the `.env` removal and the `migrate` target.
+- [x] 2.3 Extend `tests/test_plays.py` per [D6](design.md#d6): the `.env` removal and the `migrate` target.
       Verify: `uv run pytest -q tests/test_plays.py` prints `passed` and no `failed`, and `grep -c 'migrate' tests/test_plays.py` prints a number above `0`.
 
 ## 3 — The docs
