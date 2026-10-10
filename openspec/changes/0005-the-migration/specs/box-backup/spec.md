@@ -38,7 +38,7 @@ from the blueprint mount.
 
 #### Scenario: A local archive needs no bucket
 - **WHEN** `restore` runs with `box_archive_file` naming a `.zip`
-- **THEN** nothing is listed or downloaded from the bucket, and no age identity is needed
+- **THEN** nothing is listed or downloaded from the bucket, and the fetch asks for no age identity
 
 #### Scenario: An unknown file is refused
 - **WHEN** `box_archive_file` names `migrate.tar`, or `box_archive` is given too
