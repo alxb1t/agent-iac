@@ -9,33 +9,32 @@
       - "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/sops/age/keys.txt"
     box_decrypts: "{{ box_archive_file is not defined or box_archive_file.endswith('.zip.age') }}"
   block:
-    - name: Stop on a local archive and a named one
-      ansible.builtin.assert:
-        that: box_archive is not defined
-        fail_msg: give box_archive_file or box_archive, not both
-        quiet: true
+    - name: Refuse a bad local archive
       when: box_archive_file is defined
+      block:
+        - name: Stop on a local archive and a named one
+          ansible.builtin.assert:
+            that: box_archive is not defined
+            fail_msg: give box_archive_file or box_archive, not both
+            quiet: true
 
-    - name: Stop on a local archive given by a relative path
-      ansible.builtin.assert:
-        that: box_archive_file is abs
-        fail_msg: "{{ box_archive_file }} is not an absolute path"
-        quiet: true
-      when: box_archive_file is defined
+        - name: Stop on a local archive given by a relative path
+          ansible.builtin.assert:
+            that: box_archive_file is abs
+            fail_msg: "{{ box_archive_file }} is not an absolute path"
+            quiet: true
 
-    - name: Stop on a local archive that is not a file
-      ansible.builtin.assert:
-        that: box_archive_file is file
-        fail_msg: "{{ box_archive_file }} is not a file"
-        quiet: true
-      when: box_archive_file is defined
+        - name: Stop on a local archive that is not a file
+          ansible.builtin.assert:
+            that: box_archive_file is file
+            fail_msg: "{{ box_archive_file }} is not a file"
+            quiet: true
 
-    - name: Stop on a local archive of another kind
-      ansible.builtin.assert:
-        that: box_archive_file.endswith('.zip') or box_archive_file.endswith('.zip.age')
-        fail_msg: "{{ box_archive_file }} is not a .zip or a .zip.age"
-        quiet: true
-      when: box_archive_file is defined
+        - name: Stop on a local archive of another kind
+          ansible.builtin.assert:
+            that: box_archive_file.endswith('.zip') or box_archive_file.endswith('.zip.age')
+            fail_msg: "{{ box_archive_file }} is not a .zip or a .zip.age"
+            quiet: true
 
     # The file sops already decrypts the secrets with; first_found gives None when there is none.
     - name: Find the age identity
@@ -59,39 +58,45 @@
         prefix: agent-iac-restore-
       register: box_tmp
 
-    - name: List the archives
-      ansible.builtin.command:
-        argv: [rclone, lsf, --files-only, --include, "{{ box_archives_glob }}", "r2:{{ box_r2_bucket }}"]
-      environment: "{{ box_rclone }}"
-      register: box_archives
-      changed_when: false
-      no_log: true
-      when: box_archive is not defined and box_archive_file is not defined
-
-    # The names sort by time, so the last is the newest.
-    - name: Pick the archive
+    - name: Pick the local archive
       ansible.builtin.set_fact:
-        box_pick: >-
-          {{ box_archive_file | basename if box_archive_file is defined
-             else box_archive if box_archive is defined
-             else (box_archives.stdout_lines | sort | last | default('')) }}
+        box_pick: "{{ box_archive_file | basename }}"
+      when: box_archive_file is defined
 
-    - name: Stop when the bucket holds no archive
-      ansible.builtin.assert:
-        that: box_pick | length > 0
-        fail_msg: "r2:{{ box_r2_bucket }} holds no archive of {{ box.name }}"
-        quiet: true
-
-    # The box's token can upload, so a compromised box can plant a name that sorts after every nightly one.
-    # Why: 0004-the-handover design D7.
-    - name: Stop on an archive dated in the future
-      ansible.builtin.assert:
-        that: box_archive is defined or box_pick <= box.name ~ '-' ~ now(utc=true, fmt='%Y%m%dT%H%M%SZ') ~ '.zip.age'
-        fail_msg: >-
-          {{ box_pick }} is dated in the future, so no nightly run wrote it: rotate the R2 token, then name an archive
-          from before the box was compromised with -e box_archive=<name>
-        quiet: true
+    - name: Pick from the bucket
       when: box_archive_file is not defined
+      block:
+        - name: List the archives
+          ansible.builtin.command:
+            argv: [rclone, lsf, --files-only, --include, "{{ box_archives_glob }}", "r2:{{ box_r2_bucket }}"]
+          environment: "{{ box_rclone }}"
+          register: box_archives
+          changed_when: false
+          no_log: true
+          when: box_archive is not defined
+
+        # The names sort by time, so the last is the newest.
+        - name: Pick the archive
+          ansible.builtin.set_fact:
+            box_pick: >-
+              {{ box_archive if box_archive is defined else (box_archives.stdout_lines | sort | last | default('')) }}
+
+        - name: Stop when the bucket holds no archive
+          ansible.builtin.assert:
+            that: box_pick | length > 0
+            fail_msg: "r2:{{ box_r2_bucket }} holds no archive of {{ box.name }}"
+            quiet: true
+
+        # The box's token can upload, so a compromised box can plant a name that sorts after every nightly one.
+        # Why: 0004-the-handover design D7.
+        - name: Stop on an archive dated in the future
+          ansible.builtin.assert:
+            that: >-
+              box_archive is defined or box_pick <= box.name ~ '-' ~ now(utc=true, fmt='%Y%m%dT%H%M%SZ') ~ '.zip.age'
+            fail_msg: >-
+              {{ box_pick }} is dated in the future, so no nightly run wrote it: rotate the R2 token, then name an
+              archive from before the box was compromised with -e box_archive=<name>
+            quiet: true
 
     - name: Name the archive
       ansible.builtin.debug:

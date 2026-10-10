@@ -95,10 +95,11 @@ def test_restore_replaces_the_kb_only_with_kb():
 # Why: 0005-the-migration design D2.
 def test_restore_drops_the_env_of_a_local_import_only():
     steps = names(task("playbooks/restore.yml", RESTORE_BLOCK)["block"])
-    rm, read = (task("playbooks/restore.yml", n) for n in ("Remove the old install's env", "Read the volume's path"))
+    rm = task("playbooks/restore.yml", "Remove the old install's env")
+    read = task("playbooks/restore.yml", "Read the volume's path")
     assert rm["when"] == "box_archive_file is defined"
     assert argv(rm) == ["podman", "unshare", "rm", "-f", "{{ box_volume.stdout }}/.env"]
-    assert steps.index("Import the archive") < steps.index(read["name"]) < steps.index(rm["name"])
+    assert steps.index("Import the archive") < steps.index("Read the volume's path") < steps.index(rm["name"])
     assert read["when"] == "box.kb is defined or box_archive_file is defined"
 
 
