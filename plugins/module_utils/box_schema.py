@@ -13,13 +13,22 @@ RUNTIMES_DIR = Path(__file__).resolve().parents[2] / "runtimes"
 
 BOX_KEYS = ("name", "target", "runtime", "version", "backup")
 BOX_OPTIONAL_KEYS = ("kb",)
-MANIFEST_KEYS = ("image", "state", "env", "blueprint_mount", "environment", "ports")
-HOST_SECRETS = ("TAILSCALE_AUTH_KEY", "RESTIC_PASSWORD")
+MANIFEST_KEYS = ("image", "state", "env", "blueprint_mount", "environment", "ports", "backup", "restore")
+HOST_SECRETS = ("TAILSCALE_AUTH_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
 KB_SECRET = "KB_DEPLOY_KEY"
 
 NAME = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
-RESTIC_URL = re.compile(r"^(local|sftp|rest|s3|b2|azure|gs|swift|rclone):\S+$")
+# The account id names the endpoint; the bucket follows R2's naming rule (0004-the-handover design D2).
+R2_URL = re.compile(r"^r2:[0-9a-f]{32}/[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
+AGE_RECIPIENT = re.compile(r"^age1[0-9a-z]{58}$")
+ARCHIVE = "{archive}"
+# The public halves of tests/keys/*.age, whose private halves are committed: only the example box may use them.
+THROWAWAY_RECIPIENTS = (
+    "age1nhgskk4d2lsf6sk72wxgez67epsu65guw2c6zjn4pn9x48x3tyasdu8y6q",
+    "age1gtk6slhp0kta8zqr6eunrdxlmqlzy9y82ql2k527ekfm2zytg93s9rvedc",
+)
+EXAMPLE_BOX = "example"
 # GitHub only: its host keys are the ones the base blueprint pins (0003-the-knowledge-base design D3).
 KB_URL = re.compile(r"^git@github\.com:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$")
 
@@ -55,9 +64,9 @@ def validate_box(box: object, runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
     if isinstance(runtime, str) and runtime and runtime not in known:
         errors.append(f"box.yaml: unknown runtime {runtime}; known: {', '.join(known)}")
     backup = box.get("backup")
-    if isinstance(backup, str) and backup and not RESTIC_URL.match(backup):
-        errors.append("box.yaml: backup must be a restic repository URL, e.g. sftp:user@host:/path")
     # fullmatch: `$` alone lets a trailing newline through.
+    if isinstance(backup, str) and backup and not R2_URL.fullmatch(backup):
+        errors.append("box.yaml: backup must be an R2 bucket, e.g. r2:<32 hex digits of account id>/example-backups")
     if "kb" in box and not (isinstance(box["kb"], str) and KB_URL.fullmatch(box["kb"])):
         errors.append("box.yaml: kb must be a GitHub SSH URL, e.g. git@github.com:example/example-kb.git")
     return errors
@@ -65,6 +74,15 @@ def validate_box(box: object, runtimes_dir: Path = RUNTIMES_DIR) -> list[str]:
 
 def _is_abs_path(value: object) -> bool:
     return isinstance(value, str) and value.startswith("/")
+
+
+def _is_command(value: object) -> bool:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(a, str) for a in value)
+        and sum(a.count(ARCHIVE) for a in value) == 1
+    )
 
 
 def _is_port(value: object) -> bool:
@@ -103,6 +121,9 @@ def validate_manifest(manifest: object) -> list[str]:
         ports = manifest["ports"]
         if not (isinstance(ports, list) and all(_is_port(p) for p in ports)):
             errors.append("manifest: ports must be a list of TCP ports from 1 to 65535")
+    for key in ("backup", "restore"):
+        if key in manifest and not _is_command(manifest[key]):
+            errors.append(f"manifest: {key} must be a non-empty list of strings holding {ARCHIVE} exactly once")
     return errors
 
 
@@ -111,3 +132,33 @@ def missing_secrets(secrets: object, manifest: dict, box: dict) -> list[str]:
     have = secrets if isinstance(secrets, dict) else {}
     need = list(manifest.get("env", [])) + list(HOST_SECRETS) + ([KB_SECRET] if "kb" in box else [])
     return [f"secrets.sops.yaml: missing {n}" for n in need if n not in have]
+
+
+def read_recipients(sops_config: object) -> tuple[list[str], list[str]]:
+    """Return the age recipients of a parsed .sops.yaml's first creation rule, and every error.
+
+    e.g. {"creation_rules": [{"age": "age1…,age1…"}]} → (["age1…", "age1…"], [])
+    """
+    rules = sops_config.get("creation_rules") if isinstance(sops_config, dict) else None
+    rule = rules[0] if isinstance(rules, list) and rules and isinstance(rules[0], dict) else {}
+    age = rule.get("age")
+    # sops takes the keys as one comma-separated string or as a list.
+    keys = [k.strip() for k in age.split(",") if k.strip()] if isinstance(age, str) else age
+    if not (isinstance(keys, list) and keys):
+        return [], [".sops.yaml: the first creation rule names no age recipient"]
+    good = [k for k in keys if isinstance(k, str) and AGE_RECIPIENT.fullmatch(k)]
+    return good, [f".sops.yaml: {k!r} is not an age public key" for k in keys if k not in good]
+
+
+def throwaway_recipients(recipients: list[str], name: str) -> list[str]:
+    """Return an error per recipient whose private half this repo publishes, unless the box is the example.
+
+    e.g. (["age1nhgsk…"], "example-two") → [".sops.yaml: age1nhgsk… is a throwaway key …"]
+    """
+    if name == EXAMPLE_BOX:
+        return []
+    return [
+        f".sops.yaml: {k} is a throwaway key whose private half is in this repo; replace it with your own"
+        for k in recipients
+        if k in THROWAWAY_RECIPIENTS
+    ]

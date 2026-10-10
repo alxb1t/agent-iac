@@ -3,5 +3,5 @@ name: example
 target: example-pi.tailnet.example
 runtime: hermes
 version: v2026.9.24
-backup: sftp:backup@example-nas.tailnet.example:/srv/restic/example
+backup: r2:0123456789abcdef0123456789abcdef/example-backups
 kb: git@github.com:example/example-kb.git

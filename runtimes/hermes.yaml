@@ -18,3 +18,6 @@ environment:
   GIT_HOOK_ROOTS: /opt/data/kb
 ports:
   - 9119
+# Each runs in the image as the agent's user; the placeholder is the zip's path in the container.
+backup: [hermes, backup, -o, "{archive}"]
+restore: [hermes, import, --force, "{archive}"]

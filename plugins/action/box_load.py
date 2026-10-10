@@ -16,6 +16,8 @@ from ansible.plugins.action import ActionBase
 from ansible_collections.alxb1t.agent_iac.plugins.module_utils.box_schema import (
     RUNTIMES_DIR,
     missing_secrets,
+    read_recipients,
+    throwaway_recipients,
     validate_box,
     validate_manifest,
 )
@@ -64,6 +66,11 @@ class ActionModule(ActionBase):
         errors = validate_manifest(manifest)
         if errors:
             raise AnsibleActionFail(f"runtimes/{box['runtime']}.yaml: " + "; ".join(errors))
+        # The secrets' recipients are the archives' recipients: 0004-the-handover design D3.
+        recipients, errors = read_recipients(_read_yaml(box_path.parent / ".sops.yaml"))
+        errors += throwaway_recipients(recipients, box["name"])
+        if errors:
+            raise AnsibleActionFail("; ".join(errors))
         secrets = _decrypt(box_path.parent / "secrets.sops.yaml")
         errors = missing_secrets(secrets, manifest, box)
         if errors:
@@ -75,6 +82,7 @@ class ActionModule(ActionBase):
             "box": box,
             "manifest": manifest,
             "box_secrets": secrets,
+            "box_recipients": recipients,
             "box_dir": str(box_path.parent),
         }
         # The builtin add_host action does both: the result key for older cores, the call for newer.

@@ -1,18 +1,36 @@
-#!/bin/sh
-# Stop the box, snapshot its volume, start it again. Why stop-snapshot-start: 0002-the-box design D11.
-# Run by root from /etc/cron.d/box-{{ box.name }}.
-set -u
+#!/bin/bash
+# Archive the running box, encrypt it to the recipients, upload it, keep the newest five.
+# Why no stop: 0004-the-handover design D5. Run by root from /etc/cron.d/box-{{ box.name }}.
+set -euo pipefail
 [ "${1:-}" = "{{ box.name }}" ] || { echo "usage: box-backup {{ box.name }}" >&2; exit 2; }
 
-fail() { logger -p user.err -t box-backup "{{ box.name }}: $1"; }
+{% set zip = manifest.blueprint_mount ~ '/backups/agent-iac.zip' %}
+{% set remote = 'r2:' ~ box_r2_bucket %}
+# The box user owns the container, the volume and the rclone env, so it runs every step.
+job=$(cat <<'BOX'
+set -euo pipefail
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+fail() { logger -p user.err -t box-backup "{{ box.name }}: $1"; exit 1; }
+# Checked first: a shell may exit on a source it cannot read, before any fail.
+[ -r {{ box_rclone_env }} ] || fail "no rclone env {{ box_rclone_env }}"
+set -a; . {{ box_rclone_env }}; set +a
+# The plaintext zip lives only in the volume, and only until the script exits.
+trap 'podman exec --user 10000 {{ box.name }} rm -f {{ zip }} || true' EXIT
 
-# The start runs on every exit, so a failed backup leaves the agent up; a failed start fails the backup.
-trap 'systemctl --user -M {{ box_user }}@ start {{ box.name }} || { fail "start failed"; exit 1; }' EXIT
+archive={{ box.name }}-$(date -u +%Y%m%dT%H%M%SZ).zip.age
+podman exec --user 10000 {{ box.name }} {{ manifest.backup | map('replace', '{archive}', zip) | map('quote') | join(' ') }} ||
+  fail "the archive failed"
+data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data) ||
+  fail "no volume {{ box.name }}-data"
+podman unshare cat "$data/backups/agent-iac.zip" | age -R {{ box_recipients_file }} |
+  rclone rcat "{{ remote }}/$archive" || fail "the upload of $archive failed"
 
-systemctl --user -M {{ box_user }}@ stop {{ box.name }} || { fail "stop failed"; exit 1; }
-su - {{ box_user }} -c '
-  export XDG_RUNTIME_DIR=/run/user/$(id -u)
-  set -a; . {{ box_restic_env }}; set +a
-  data=$(podman volume inspect --format "{% raw %}{{ .Mountpoint }}{% endraw %}" {{ box.name }}-data) &&
-  podman unshare restic backup "$data" --tag {{ box.name }}
-' || { fail "restic backup failed"; exit 1; }
+# The names sort by time; a delete the bucket's lock refuses is the lock working.
+rclone lsf --files-only --include '{{ box_archives_glob }}' {{ remote }} | sort -r | tail -n +6 |
+  while read -r old; do
+    rclone deletefile "{{ remote }}/$old" ||
+      logger -p user.warning -t box-backup "{{ box.name }}: the bucket kept $old"
+  done || fail "the listing of {{ remote }} failed"
+BOX
+)
+exec su - {{ box_user }} -s /bin/bash -c "$job"

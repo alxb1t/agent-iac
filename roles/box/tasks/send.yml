@@ -1,0 +1,28 @@
+---
+# Copies the decrypted zip at box_local to box_zip, then removes it from the machine running make, whatever the box
+# does: a box that drops mid-copy is caught as a failure, so the always: runs. Why: 0004-the-handover design D7.
+- name: Hand the zip to the box
+  block:
+    # 0644: the container's user reads it through the bind mount; its folder is 0700.
+    - name: Copy the zip to the box
+      ansible.builtin.copy:
+        src: "{{ box_local }}/restore.zip"
+        dest: "{{ box_zip }}"
+        mode: "0644"
+      become: true
+      become_user: "{{ box_user }}"
+      ignore_unreachable: true
+      register: box_sent
+
+    - name: Stop when the box dropped
+      ansible.builtin.assert:
+        that: box_sent is not unreachable
+        fail_msg: the box dropped during the copy
+        quiet: true
+  always:
+    - name: Remove the decrypted archive
+      ansible.builtin.file:
+        path: "{{ box_local }}"
+        state: absent
+      delegate_to: localhost
+      become: false

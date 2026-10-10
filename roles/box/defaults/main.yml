@@ -2,13 +2,28 @@
 box_user: box
 box_home: "/home/{{ box_user }}"
 box_config: "{{ box_home }}/.config/agent-iac"
-box_restic_env: "{{ box_config }}/{{ box.name }}.restic.env"
+box_rclone_env: "{{ box_config }}/{{ box.name }}.rclone.env"
+box_recipients_file: "{{ box_config }}/{{ box.name }}.recipients"
+# box.yaml's backup is r2:<account-id>/<bucket>.
+box_r2_account: "{{ box.backup.split(':', 1)[1].split('/', 1)[0] }}"
+box_r2_bucket: "{{ box.backup.split('/', 1)[1] }}"
+# The box's own archives only: a bare * would also match a box named <name>-<more>.
+box_archives_glob: "{{ box.name }}-{{ '[0-9]' * 8 }}T{{ '[0-9]' * 6 }}Z.zip.age"
+# The R2 remote, read wholly from env: the box's backup sources it, restore sets it on its tasks.
+box_rclone:
+  RCLONE_CONFIG_R2_TYPE: s3
+  RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+  RCLONE_CONFIG_R2_ACCESS_KEY_ID: "{{ box_secrets.R2_ACCESS_KEY_ID }}"
+  RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "{{ box_secrets.R2_SECRET_ACCESS_KEY }}"
+  RCLONE_CONFIG_R2_ENDPOINT: "https://{{ box_r2_account }}.r2.cloudflarestorage.com"
+  RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"
 box_tailscale_key: /run/box-tailscale-auth-key
 box_packages:
   - podman
   - crun
   - rsync
-  - restic
+  - age
+  - rclone
   - nftables
   - unattended-upgrades
   - tailscale

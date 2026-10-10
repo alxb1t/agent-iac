@@ -1,0 +1,92 @@
+---
+# Run on the machine running make: the box holds public keys only. Why: 0004-the-handover design D7.
+# Sets box_tmp, the private folder holding restore.zip, and box_pick, the archive's name.
+- name: Fetch and decrypt in a private folder
+  vars:
+    box_identities:
+      - "{{ lookup('ansible.builtin.env', 'HOME') }}/Library/Application Support/sops/age/keys.txt"
+      - "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/sops/age/keys.txt"
+  block:
+    # The file sops already decrypts the secrets with; first_found gives None when there is none.
+    - name: Find the age identity
+      ansible.builtin.set_fact:
+        box_identity: >-
+          {{ (lookup('ansible.builtin.env', 'SOPS_AGE_KEY_FILE')
+              or lookup('ansible.builtin.first_found', box_identities, errors='ignore')
+              or '') | trim }}
+
+    - name: Stop without an age identity
+      ansible.builtin.assert:
+        that: box_identity | length > 0 and box_identity is file
+        fail_msg: no age identity; set SOPS_AGE_KEY_FILE or put the key in ~/.config/sops/age/keys.txt
+        quiet: true
+
+    - name: Make the private folder
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: agent-iac-restore-
+      register: box_tmp
+
+    - name: List the archives
+      ansible.builtin.command:
+        argv: [rclone, lsf, --files-only, --include, "{{ box_archives_glob }}", "r2:{{ box_r2_bucket }}"]
+      environment: "{{ box_rclone }}"
+      register: box_archives
+      changed_when: false
+      no_log: true
+      when: box_archive is not defined
+
+    # The names sort by time, so the last is the newest.
+    - name: Pick the archive
+      ansible.builtin.set_fact:
+        box_pick: >-
+          {{ box_archive if box_archive is defined else (box_archives.stdout_lines | sort | last | default('')) }}
+
+    - name: Stop when the bucket holds no archive
+      ansible.builtin.assert:
+        that: box_pick | length > 0
+        fail_msg: "r2:{{ box_r2_bucket }} holds no archive of {{ box.name }}"
+        quiet: true
+
+    # The box's token can upload, so a compromised box can plant a name that sorts after every nightly one.
+    # Why: 0004-the-handover design D7.
+    - name: Stop on an archive dated in the future
+      ansible.builtin.assert:
+        that: box_archive is defined or box_pick <= box.name ~ '-' ~ now(utc=true, fmt='%Y%m%dT%H%M%SZ') ~ '.zip.age'
+        fail_msg: >-
+          {{ box_pick }} is dated in the future, so no nightly run wrote it: rotate the R2 token, then name an archive
+          from before the box was compromised with -e box_archive=<name>
+        quiet: true
+
+    - name: Name the archive
+      ansible.builtin.debug:
+        msg: "archive: {{ box_pick }}"
+
+    - name: Download the archive
+      ansible.builtin.command:
+        argv: [rclone, copyto, "r2:{{ box_r2_bucket }}/{{ box_pick }}", "{{ box_tmp.path }}/{{ box_pick }}"]
+      environment: "{{ box_rclone }}"
+      changed_when: true
+      no_log: true
+
+    - name: Decrypt the archive
+      ansible.builtin.command:
+        argv:
+          - age
+          - -d
+          - -i
+          - "{{ box_identity }}"
+          - -o
+          - "{{ box_tmp.path }}/restore.zip"
+          - "{{ box_tmp.path }}/{{ box_pick }}"
+      changed_when: true
+  rescue:
+    - name: Remove the private folder
+      ansible.builtin.file:
+        path: "{{ box_tmp.path }}"
+        state: absent
+      when: box_tmp.path is defined
+
+    - name: Name the step that failed
+      ansible.builtin.fail:
+        msg: "{{ ansible_failed_task.name }} failed; the box was not touched"

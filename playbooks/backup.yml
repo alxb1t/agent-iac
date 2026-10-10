@@ -11,6 +11,6 @@
   hosts: box
   gather_facts: false
   tasks:
-    - name: Stop, snapshot and start the box
+    - name: Archive, encrypt and upload the box
       ansible.builtin.command: /usr/local/bin/box-backup {{ box.name }}
       changed_when: true

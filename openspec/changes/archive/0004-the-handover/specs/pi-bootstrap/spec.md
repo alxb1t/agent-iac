@@ -1,11 +1,4 @@
-# pi-bootstrap Specification
-
-## Purpose
-
-The one hand-run step between "a Pi was flashed with Imager" and "a host exists on the tailnet": a script whoever
-holds the Pi runs once from their own machine on the Pi's LAN.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: The bootstrap script joins the tailnet and admits the operator
 `bootstrap-pi.sh` SHALL take the operator's SSH public key as its one argument, read the Tailscale auth key from the

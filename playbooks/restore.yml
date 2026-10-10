@@ -7,40 +7,93 @@
       alxb1t.agent_iac.box_load:
         box_file: "{{ box_file }}"
 
-# Stop, replace the volume with a snapshot, start. Pick one with -e box_snapshot=<id>.
-# --delete removes what the snapshot lacks, so only the volume's subtree is restored, into the volume.
+# An unreachable box stops the run here, before anything is decrypted: 0004-the-handover review R2.
+- name: Reach the box
+  hosts: box
+  gather_facts: false
+  tasks:
+    - name: Set the box user's bus
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: user_env.yml
+
+# The box holds public keys only, so the archive is decrypted here: 0004-the-handover design D7.
+# The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age.
+- name: Fetch and decrypt the archive
+  hosts: localhost
+  gather_facts: false
+  vars:
+    box: "{{ hostvars[groups.box[0]].box }}"
+    box_secrets: "{{ hostvars[groups.box[0]].box_secrets }}"
+  tasks:
+    - name: Fetch and decrypt the archive
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: fetch.yml
+
+# A stopped service holds no database; the start and the clean-up run on every exit.
+# Why: 0004-the-handover design D8.
 - name: Restore the box
   hosts: box
   gather_facts: false
   vars_files:
     - ../roles/box/defaults/main.yml
   vars:
-    box_snapshot: latest
-    box_as_user: >-
-      export XDG_RUNTIME_DIR=/run/user/$(id -u);
-      set -a; . {{ box_restic_env }}; set +a;
-      data=$(podman volume inspect --format '{% raw %}{{ .Mountpoint }}{% endraw %}' {{ box.name }}-data) || exit 1;
+    box_local: "{{ hostvars.localhost.box_tmp.path }}"
+    box_zip: "{{ box_config }}/{{ box.name }}/restore.zip"
+    box_in_container: /tmp/agent-iac-restore.zip
   tasks:
     - name: Restore with the service stopped
+      become: true
+      become_user: "{{ box_user }}"
+      environment: "{{ box_user_env }}"
       block:
+        - name: Hand the zip to the box
+          ansible.builtin.include_role:
+            name: alxb1t.agent_iac.box
+            tasks_from: send.yml
+
         - name: Stop the box
+          ansible.builtin.systemd_service:
+            name: "{{ box.name }}"
+            state: stopped
+            scope: user
+
+        - name: Import the archive
           ansible.builtin.command:
-            argv: [systemctl, --user, -M, "{{ box_user }}@", stop, "{{ box.name }}"]
+            cmd: >-
+              podman run --rm --user 10000 --entrypoint {{ manifest.restore[0] | quote }}
+              -v {{ box.name }}-data:{{ manifest.blueprint_mount }} -v {{ box_zip }}:{{ box_in_container }}:ro
+              {{ manifest.image }}:{{ box.version }}
+              {{ manifest.restore[1:] | map('replace', '{archive}', box_in_container) | map('quote') | join(' ') }}
           changed_when: true
 
-        - name: Replace the volume with the snapshot
+        - name: Read the volume's path
+          ansible.builtin.command: >-
+            podman volume inspect --format {% raw %}'{{ .Mountpoint }}'{% endraw %} {{ box.name }}-data
+          register: box_volume
+          changed_when: false
+          when: box.kb is defined
+
+        # The archive's kb/ has no .git, and the clone runs only into an empty folder.
+        - name: Remove the archive's KB
           ansible.builtin.command:
-            argv:
-              - su
-              - "-"
-              - "{{ box_user }}"
-              - -c
-              - >-
-                {{ box_as_user }} podman unshare restic restore "{{ box_snapshot }}:$data"
-                --target "$data" --delete
+            argv: [podman, unshare, rm, -rf, "{{ box_volume.stdout }}/kb"]
           changed_when: true
+          when: box.kb is defined
       always:
         - name: Start the box
-          ansible.builtin.command:
-            argv: [systemctl, --user, -M, "{{ box_user }}@", start, "{{ box.name }}"]
-          changed_when: true
+          ansible.builtin.systemd_service:
+            name: "{{ box.name }}"
+            state: started
+            scope: user
+
+        - name: Remove the zip from the box
+          ansible.builtin.file:
+            path: "{{ box_zip }}"
+            state: absent
+
+    - name: Clone the KB from its remote
+      ansible.builtin.include_role:
+        name: alxb1t.agent_iac.box
+        tasks_from: kb.yml

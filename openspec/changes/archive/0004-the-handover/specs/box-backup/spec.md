@@ -1,47 +1,4 @@
-# box-backup Specification
-
-## Purpose
-
-The nightly encrypted archive of the agent's state, the one-step restore that brings a box back, the drill that proves it,
-and the status line.
-
-## Requirements
-
-### Requirement: Restore is one step
-`restore` SHALL fetch the newest archive (or a named one), decrypt it on the machine running it, stop the service,
-import it into the state volume with the manifest's `restore` command, and start the service. When `box.yaml` sets
-`kb`, it SHALL then replace `kb` under the blueprint mount with a fresh clone. No other step SHALL be needed for the
-agent to resume with its previous state. The decrypted archive SHALL be removed from both machines at the end. It
-SHALL print the archive's name before the download, and SHALL stop when the newest archive is dated after the time
-of the machine running it, unless the archive is named.
-
-#### Scenario: A fresh box resumes after restore
-- **WHEN** `apply` has run on a fresh host and `restore` is run against the same bucket
-- **THEN** the agent starts with the sessions and memories of the archive
-
-#### Scenario: The KB comes back from its remote
-- **WHEN** `restore` runs on a box with `kb` set
-- **THEN** `/opt/data/kb` is a clone of the KB repo with its history, not the archive's copy
-
-#### Scenario: An unreachable box leaves no decrypted copy
-- **WHEN** `restore` runs while the box is off the network, or the box drops during the copy of the zip
-- **THEN** it fails before decrypting, or removes the decrypted archive from the machine running it
-
-#### Scenario: A planted archive is refused
-- **WHEN** a compromised box has uploaded `<name>-99991231T000000Z.zip.age` and `restore` runs without naming one
-- **THEN** it stops before the download, naming that archive, and the box is not touched
-
-#### Scenario: The client restores alone
-- **WHEN** the client runs `make restore` from their deployment repo with their own age key
-- **THEN** the restore completes without the operator's key
-
-### Requirement: Status is three lines
-`status` SHALL print whether the box's container is running, the image it runs, and the name of the newest archive
-in the bucket.
-
-#### Scenario: A healthy box
-- **WHEN** `status` runs against a running box with one archive
-- **THEN** it prints the container state, the image reference and the archive's name, and nothing else
+## ADDED Requirements
 
 ### Requirement: Nightly backup by archive, encrypt, upload
 At 04:00 host time the box SHALL run the manifest's `backup` command in the running container, encrypt the archive
@@ -95,3 +52,52 @@ live volume, and SHALL remove the scratch volume and every decrypted copy at the
 #### Scenario: A broken archive fails the drill
 - **WHEN** the newest archive's `state.db` fails its integrity check
 - **THEN** the drill exits non-zero, naming the check
+
+## MODIFIED Requirements
+
+### Requirement: Restore is one step
+`restore` SHALL fetch the newest archive (or a named one), decrypt it on the machine running it, stop the service,
+import it into the state volume with the manifest's `restore` command, and start the service. When `box.yaml` sets
+`kb`, it SHALL then replace `kb` under the blueprint mount with a fresh clone. No other step SHALL be needed for the
+agent to resume with its previous state. The decrypted archive SHALL be removed from both machines at the end. It
+SHALL print the archive's name before the download, and SHALL stop when the newest archive is dated after the time
+of the machine running it, unless the archive is named.
+
+#### Scenario: A fresh box resumes after restore
+- **WHEN** `apply` has run on a fresh host and `restore` is run against the same bucket
+- **THEN** the agent starts with the sessions and memories of the archive
+
+#### Scenario: The KB comes back from its remote
+- **WHEN** `restore` runs on a box with `kb` set
+- **THEN** `/opt/data/kb` is a clone of the KB repo with its history, not the archive's copy
+
+#### Scenario: An unreachable box leaves no decrypted copy
+- **WHEN** `restore` runs while the box is off the network, or the box drops during the copy of the zip
+- **THEN** it fails before decrypting, or removes the decrypted archive from the machine running it
+
+#### Scenario: A planted archive is refused
+- **WHEN** a compromised box has uploaded `<name>-99991231T000000Z.zip.age` and `restore` runs without naming one
+- **THEN** it stops before the download, naming that archive, and the box is not touched
+
+#### Scenario: The client restores alone
+- **WHEN** the client runs `make restore` from their deployment repo with their own age key
+- **THEN** the restore completes without the operator's key
+
+### Requirement: Status is three lines
+`status` SHALL print whether the box's container is running, the image it runs, and the name of the newest archive
+in the bucket.
+
+#### Scenario: A healthy box
+- **WHEN** `status` runs against a running box with one archive
+- **THEN** it prints the container state, the image reference and the archive's name, and nothing else
+
+## REMOVED Requirements
+
+### Requirement: Nightly backup by stop, snapshot, start
+**Reason**: restic leaves; replaced by *Nightly backup by archive, encrypt, upload*, which keeps the agent running.
+**Migration**: `box.yaml`'s `backup` becomes `r2:<account-id>/<bucket>`; the restic repository is not read again.
+
+### Requirement: The restore drill proves a snapshot
+**Reason**: a diff against the live state fails whenever the agent wrote since the backup (backlog 0002·R11);
+replaced by *The restore drill proves an archive*.
+**Migration**: none — `make restore-drill` keeps its name.

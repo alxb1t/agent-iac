@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
+
+### Added
+
+- `docs/host.md` opens with the onboarding: the client's R2 bucket, its four-day lock rule and a bucket-scoped token; the client's age key beside the operator's; a `tag:box` auth key and a tailnet policy under which the box reaches nothing; then the node's share and a terminal provider login. `examples/box/RESTORE.md` shows the client `make restore` and the restore by hand with `age -d` and `hermes import`.
+
+### Changed
+
+- The runtime manifest has eight fields: `backup` and `restore` join it, each a command line holding `{archive}` once, so a runtime declares how it archives and restores itself. `box.yaml`'s `backup` is an R2 bucket, `r2:<account-id>/<bucket>`; the R2 key pair replaces `RESTIC_PASSWORD` among the required secrets.
+- `box_load` reads the age recipients of `.sops.yaml` beside `box.yaml` and refuses a file naming none, so the archives go to the same keys as the secrets.
+- The nightly backup no longer stops the agent: `box-backup` runs the manifest's `backup` in the container, pipes the zip through `age` to the recipients and `rclone rcat`s it to R2, then keeps the newest five; a delete the bucket's lock refuses is a warning, not a failure.
+- The host carries `age` and `rclone` instead of `restic`; `apply` writes the rclone env and the recipients, and removes the restic env file with its password.
+- `restore` and `restore-drill` fetch and decrypt the archive on the machine running `make`, so the box never holds a private key. `restore` stops the service, imports the archive in a one-off container and starts it again on every exit; with `kb:`, it then clones the KB afresh through the role's new `kb.yml`. `-e box_archive=<file>` picks an archive.
+- `restore-drill` imports into a scratch volume and checks `state.db`'s integrity, its `sessions` table and `config.yaml`, printing the session count, instead of diffing against a live state that has moved on. `status`'s third line names the newest archive.
+- `bootstrap-pi.sh` takes only the operator's SSH public key and reads the Tailscale auth key from the terminal without echo, so the key is on no command line and `curl … | sudo sh -s -- "<key>"` still works. Tailscale's signing key downloads to a temporary file and reaches the keyring path only after its hash checks.
+- The collection is `0.4.0`; the example pins `v0.4.0`, gains `make restore`, backs up to an R2 bucket, and encrypts its secrets to an operator's and a client's throwaway key. `docs/kb.md` says to set the ruleset **Active**. `README.md` and `docs/architecture.md` say eight fields, R2 and the client's key; `CLAUDE.md` says eight fields.
+
+### Fixed
+
+- A box lists its archives as `<name>-<timestamp>.zip.age` with the timestamp's shape spelt out, so the keep-five, `restore`, `restore-drill` and `status` of `example` never touch or pick the archives of a box named `example-two` in the same bucket.
+- `restore` and `restore-drill` reach the box before decrypting, and remove the decrypted archive from the machine running them as soon as it is copied to the box, even when the box drops during the copy.
+- `restore` and `restore-drill` stop with "no age identity" when neither `SOPS_AGE_KEY_FILE` nor sops' default key file exists, instead of failing later at the decrypt.
+- `restore` and `restore-drill` name the archive they picked, and stop on a newest archive dated in the future, which a compromised box could have planted; `RESTORE.md` and `docs/host.md` say to rotate the R2 token and name an archive from before the compromise.
+- `box_load` refuses a box not named `example` whose `.sops.yaml` keeps a throwaway key of `tests/keys/`, whose private half is public, so a copied example never encrypts secrets and archives to it.
+- `box-backup` logs an error when the rclone env file is missing or unreadable, instead of exiting with no line in the system log.
+- `apply` removes the SFTP key, the ssh `config` and the `known_hosts` that v0.3's backup left in the box user's `~/.ssh`. On upgrading a v0.3 box, also remove its key, `<name>-backup`, from the old backup host's `authorized_keys`.
+- The onboarding's tailnet policy admits the client the node is shared with, `autogroup:shared`, to the box's dashboard and SSH; the hand-over adds the client's SSH public key to root's, so the client can run `make restore` alone, as `RESTORE.md` says.
+- `docs/kb.md` says `make restore` clones the KB afresh, so unpushed KB files are not restored; `docs/architecture.md` says the restore drill gates the acceptance by hand, not a release; the `box-backup` spec's purpose names the encrypted archive, not a snapshot.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added

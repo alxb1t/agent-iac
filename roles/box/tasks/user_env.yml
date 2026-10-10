@@ -1,0 +1,11 @@
+---
+- name: Read the box user's uid
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ box_user }}"
+
+- name: Set the box user's bus
+  ansible.builtin.set_fact:
+    box_user_env:
+      XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}"
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts.getent_passwd[box_user][1] }}/bus"

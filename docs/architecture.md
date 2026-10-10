@@ -31,13 +31,14 @@ tailnet: the [host checklist](host.md). `target` is always a tailnet name.
  operator's Mac                       the box: a Pi today; a VPS or a Proxmox guest later
  ┌──────────────────────────┐  ssh   ┌───────────────────────────────────────┐
  │ deployment repo (private)│───────▶│ PI OS    rootless podman · tailscale   │
- │  box.yaml · blueprint/   │        │          nftables · restic · quadlet   │
+ │  box.yaml · blueprint/   │        │          nftables · rclone · quadlet   │
  │  secrets.sops.yaml       │        │  ┌─────────────────────────────────┐  │
  │  requirements.yml ──┐    │        │  │ the agent's official image      │  │
  └─────────────────────┼────┘        │  │ state volume · blueprint copied │  │
                        ▼             │  └─────────────────────────────────┘  │
  agent-iac (public collection)       └───────────────────────────────────────┘
  client phone ─Telegram─▶ Telegram ◀─poll─ the box
+ the box ─nightly archive, encrypted with age─▶ the client's R2 bucket
 ```
 
 ## The host
@@ -57,10 +58,11 @@ The container's libc is not a boundary. The host is.
 
 This section decides what an agent declares to the box, and nothing more.
 
-A **runtime** is declared by a manifest of six fields: `image · state · env · blueprint_mount · environment · ports`.
-The image tag comes from `box.yaml`'s `version`. `environment` holds fixed variables that are not secret; `ports` are
-published on the host's tailnet address only. agent-iac never parses the agent's own config. The agent never knows
-agent-iac exists.
+A **runtime** is declared by a manifest of eight fields:
+`image · state · env · blueprint_mount · environment · ports · backup · restore`. The image tag comes from
+`box.yaml`'s `version`. `environment` holds fixed variables that are not secret; `ports` are published on the host's
+tailnet address only. `backup` and `restore` are the runtime's own command lines, each holding `{archive}` once.
+agent-iac never parses the agent's own config. The agent never knows agent-iac exists.
 
 ```yaml
 # runtimes/hermes.yaml
@@ -83,6 +85,8 @@ environment:                                   # fixed variables, set on the con
   GIT_HOOK_ROOTS: /opt/data/kb
 ports:                                         # published on the tailnet address only
   - 9119
+backup: [hermes, backup, -o, "{archive}"]      # run in the running container; safe while the agent runs
+restore: [hermes, import, --force, "{archive}"]  # run in a one-off container, the service stopped
 ```
 
 ## box.yaml
@@ -99,7 +103,7 @@ name: example
 target: example.tailnet.example       # the host, as SSH reaches it
 runtime: hermes                       # names runtimes/hermes.yaml
 version: v2026.10.1                   # the pinned image tag
-backup: sftp:user@mac:/backups/example   # a restic repository URL; a bucket later
+backup: r2:0123456789abcdef0123456789abcdef/example-backups  # the client's R2 bucket: r2:<account id>/<bucket>
 kb: git@github.com:example/example-kb.git  # optional: the knowledge base, a GitHub SSH URL
 ```
 
@@ -108,21 +112,22 @@ kb: git@github.com:example/example-kb.git  # optional: the knowledge base, a Git
 This section decides how a secret reaches the box, and how a backup is proven.
 
 **Secrets: sops + age.**
-- `secrets.sops.yaml` sits in the deployment repo. Keys are readable; values are encrypted to the operator's age
-  public key.
+- `secrets.sops.yaml` sits in the deployment repo. Keys are readable; values are encrypted to the age public keys
+  of `.sops.yaml`: the operator's and the client's.
 - At apply, Ansible decrypts on the operator's machine and writes a `0600` env file for the box user.
-- The age private key never leaves the operator's machine. The agent reads only its own env and, with a `kb`,
-  its deploy key.
+- The age private keys stay on the operator's and the client's machines; the box holds the public keys only. The
+  agent reads only its own env and, with a `kb`, its deploy key.
 
-**Backups: restic.**
-- At 04:00, cron stops the box, restic snapshots its state volume, and the box starts again: stop, snapshot,
-  start. Stopping first keeps SQLite whole; the start runs even when the snapshot fails.
-- A restore is one step: stop, restore the snapshot over the volume, start.
-- The restic repository is a URL in `box.yaml`.
-- A **restore drill** from the operator's machine is a release gate of every change that touches backup.
-- Prune runs from the operator's machine, never on the box. In this version the repository is SFTP, and the
-  box's SFTP key and restic password can delete its snapshots; the credential that cannot delete comes with the
-  bucket, in a later version.
+**Backups: an encrypted archive in the client's bucket.**
+- At 04:00, cron runs the manifest's `backup` in the running container, encrypts the zip with `age` to the keys of
+  `.sops.yaml`, and uploads it with `rclone` to the R2 bucket in `box.yaml`. The agent keeps running.
+- The box keeps its newest five archives. The bucket's lock rule refuses to delete one younger than four days, and
+  the box's token cannot lift it, so a compromised box cannot erase the newest nights.
+- A restore is one step, from the operator's or the client's machine: fetch, decrypt there, stop, import with the
+  manifest's `restore`, start. By hand, it is `age -d` and `hermes import`: the example's
+  [RESTORE.md](../examples/box/RESTORE.md).
+- A **restore drill** imports the newest archive into a scratch volume and checks its database. It needs a box and
+  a bucket, so it gates the acceptance by hand, not a release: v0.4.0 rewrote the backup and shipped without one.
 
 ## The tiers
 
@@ -130,7 +135,7 @@ This section decides what the box enforces around the agent. A tier is what the 
 
 | tier | what the box enforces |
 |---|---|
-| open | the box as described above: rootless Podman, Tailscale-only inbound, encrypted secrets, restic backups |
+| open | the box as described above: rootless Podman, Tailscale-only inbound, encrypted secrets, encrypted backups |
 | fenced | open, plus a proxy container on an internal Podman network with a CONNECT allowlist by domain, nftables outbound, every deny logged |
 
 A third tier, *sealed*, is not yet specified. Tiers are keyed to the box, not to the agent's settings: an agent's
@@ -141,7 +146,7 @@ approval mode is a convenience, not a control.
 This section decides what lives in which repo, and how knowledge reaches the client's devices.
 
 **Library, not template.**
-- A deployment repo holds data only: `box.yaml`, `blueprint/`, `secrets.sops.yaml`, a four-target `Makefile`, and
+- A deployment repo holds data only: `box.yaml`, `blueprint/`, `secrets.sops.yaml`, a five-target `Makefile`, and
   `requirements.yml` pinning the collection to a git tag.
 - One private repo per client.
 - The collection ships `blueprints/base/`. The role copies the base first, then the deployment's `blueprint/`

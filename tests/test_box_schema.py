@@ -7,10 +7,12 @@ from box_schema import (
     MANIFEST_KEYS,
     known_runtimes,
     missing_secrets,
+    read_recipients,
+    throwaway_recipients,
     validate_box,
     validate_manifest,
 )
-from conftest import VALID_BOX
+from conftest import EXAMPLE_RECIPIENT, ROOT, VALID_BOX
 
 
 def test_valid_box_is_accepted():
@@ -49,6 +51,11 @@ def test_known_runtimes_reads_the_shipped_manifests():
         ("name", "x"),
         ("version", ""),
         ("backup", "example-nas:/srv"),
+        ("backup", "sftp:backup@example-nas:/srv/restic/example"),
+        ("backup", "r2:0123456789ABCDEF0123456789ABCDEF/example-backups"),
+        ("backup", "r2:0123456789abcdef/example-backups"),
+        ("backup", "r2:0123456789abcdef0123456789abcdef/Example"),
+        ("backup", "r2:0123456789abcdef0123456789abcdef/example-backups\n"),
         ("target", 3),
         ("kb", "https://github.com/example/example-kb.git"),
         ("kb", "git@gitlab.com:example/example-kb.git"),
@@ -77,6 +84,19 @@ def test_hermes_manifest_is_valid(hermes):
         "HERMES_DASHBOARD_BASIC_AUTH_SECRET",
     ]
     assert hermes["ports"] == [9119]
+    assert hermes["backup"] == ["hermes", "backup", "-o", "{archive}"]
+    assert hermes["restore"] == ["hermes", "import", "--force", "{archive}"]
+
+
+@pytest.mark.parametrize("key", ["backup", "restore"])
+@pytest.mark.parametrize(
+    "argv",
+    [["hermes", "backup"], ["{archive}", "{archive}"], [], "hermes backup -o {archive}", ["hermes", 3, "{archive}"]],
+)
+def test_command_without_one_archive_is_refused(hermes, key, argv):
+    assert validate_manifest({**hermes, key: argv}) == [
+        f"manifest: {key} must be a non-empty list of strings holding {{archive}} exactly once"
+    ]
 
 
 # The variables that point the skills and the sync plugin at the KB; the role clones it to <blueprint_mount>/kb.
@@ -157,5 +177,72 @@ def test_missing_secret_is_named_without_values(hermes):
     assert errors == [
         "secrets.sops.yaml: missing OPENROUTER_API_KEY",
         "secrets.sops.yaml: missing TAILSCALE_AUTH_KEY",
+        "secrets.sops.yaml: missing R2_ACCESS_KEY_ID",
+        "secrets.sops.yaml: missing R2_SECRET_ACCESS_KEY",
     ]
     assert "s3cr3t" not in " ".join(errors)
+
+
+def test_restic_password_is_not_required(hermes, sample_vars):
+    secrets = {k: v for k, v in sample_vars["box_secrets"].items() if k != "RESTIC_PASSWORD"}
+    assert missing_secrets(secrets, hermes, VALID_BOX) == []
+
+
+OTHER_RECIPIENT = "age1" + "q" * 58
+
+
+def _sops_config(age):
+    return {"creation_rules": [{"path_regex": "secrets\\.sops\\.yaml$", "age": age}]}
+
+
+@pytest.mark.parametrize(
+    "age",
+    [
+        f"{EXAMPLE_RECIPIENT},{OTHER_RECIPIENT}",
+        f"{EXAMPLE_RECIPIENT},\n  {OTHER_RECIPIENT}",
+        [EXAMPLE_RECIPIENT, OTHER_RECIPIENT],
+    ],
+)
+def test_recipients_are_read_from_a_string_or_a_list(age):
+    assert read_recipients(_sops_config(age)) == ([EXAMPLE_RECIPIENT, OTHER_RECIPIENT], [])
+
+
+def test_the_first_creation_rule_is_read():
+    config = _sops_config(EXAMPLE_RECIPIENT)
+    config["creation_rules"].append({"age": OTHER_RECIPIENT})
+    assert read_recipients(config) == ([EXAMPLE_RECIPIENT], [])
+
+
+@pytest.mark.parametrize(
+    "config",
+    [None, {}, {"creation_rules": []}, _sops_config(""), _sops_config([]), {"creation_rules": [{"pgp": "x"}]}],
+)
+def test_no_recipient_is_refused(config):
+    assert read_recipients(config) == ([], [".sops.yaml: the first creation rule names no age recipient"])
+
+
+@pytest.mark.parametrize("bad", ["age1short", f"{EXAMPLE_RECIPIENT}\n", EXAMPLE_RECIPIENT.upper(), 3])
+def test_a_bad_recipient_is_named(bad):
+    keys, errors = read_recipients(_sops_config([EXAMPLE_RECIPIENT, bad]))
+    assert errors == [f".sops.yaml: {bad!r} is not an age public key"]
+
+
+def throwaway_keys():
+    """Return the public halves of tests/keys/*.age, read from each file's `# public key:` line."""
+    lines = [line for p in sorted((ROOT / "tests" / "keys").glob("*.age")) for line in p.read_text().splitlines()]
+    return [line.split(": ", 1)[1] for line in lines if line.startswith("# public key: ")]
+
+
+# A deployment copied from the example, its own key swapped in beside the client's throwaway one: 0004 security S4.
+def test_a_copied_box_refuses_the_committed_throwaway_keys():
+    keys = throwaway_keys()
+    assert len(keys) == 2
+    assert throwaway_recipients([OTHER_RECIPIENT, keys[0]], "example-two") == [
+        f".sops.yaml: {keys[0]} is a throwaway key whose private half is in this repo; replace it with your own"
+    ]
+    assert len(throwaway_recipients([OTHER_RECIPIENT, *keys], "example-two")) == 2
+
+
+def test_the_example_box_keeps_its_throwaway_keys():
+    assert throwaway_recipients(throwaway_keys(), "example") == []
+    assert throwaway_recipients([OTHER_RECIPIENT], "example-two") == []
