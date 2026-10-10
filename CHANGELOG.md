@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
+### Added
+
+- `restore` takes `-e box_archive_file=<absolute path>`: a local `.zip.age` is decrypted with the same identity, a `.zip` copied as is, into the private folder, so a hand-installed Hermes's `hermes backup` zip has a way in. The file is never moved; a relative path, a missing file, another kind of file and `box_archive` beside it are refused before anything is made.
+- `restore` with a local `.zip` removes `.env` from the volume after the import, and before the start when the import fails, so the old install's secrets neither shadow the sops ones nor stay on the box. A local `.zip.age`, a box's own archive, keeps its `.env` and the keys `hermes auth add` wrote. The example's `make migrate ZIP=<path>` runs it, and refuses a path with a space.
+- `docs/host.md` gains *Migrating a hand-installed Hermes*: move the old `.env` into sops, back up, stop the old gateway, `make migrate`, delete the zip. `RESTORE.md`, `README.md` and `docs/architecture.md` name the local archive.
+
+### Changed
+
+- The collection is `0.5.0`; the example pins `v0.5.0`.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added

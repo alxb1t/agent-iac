@@ -125,7 +125,10 @@ This section decides how a secret reaches the box, and how a backup is proven.
   the box's token cannot lift it, so a compromised box cannot erase the newest nights.
 - A restore is one step, from the operator's or the client's machine: fetch, decrypt there, stop, import with the
   manifest's `restore`, start. By hand, it is `age -d` and `hermes import`: the example's
-  [RESTORE.md](../examples/box/RESTORE.md).
+  [RESTORE.md](../examples/box/RESTORE.md). A local archive, `.zip` or `.zip.age`, takes the same path with
+  `make migrate ZIP=<path>`. A `.zip`'s `.env` is removed after the import, so the secrets come from sops: that is how
+  a hand-installed Hermes moves into a box, per section 7 of the [host checklist](host.md). A `.zip.age` is a box's
+  own, and keeps its `.env`.
 - A **restore drill** imports the newest archive into a scratch volume and checks its database. It needs a box and
   a bucket, so it gates the acceptance by hand, not a release: v0.4.0 rewrote the backup and shipped without one.
 
@@ -146,8 +149,8 @@ approval mode is a convenience, not a control.
 This section decides what lives in which repo, and how knowledge reaches the client's devices.
 
 **Library, not template.**
-- A deployment repo holds data only: `box.yaml`, `blueprint/`, `secrets.sops.yaml`, a five-target `Makefile`, and
-  `requirements.yml` pinning the collection to a git tag.
+- A deployment repo holds data only: `box.yaml`, `blueprint/`, `secrets.sops.yaml`, a `Makefile` of one-line
+  targets, and `requirements.yml` pinning the collection to a git tag.
 - One private repo per client.
 - The collection ships `blueprints/base/`. The role copies the base first, then the deployment's `blueprint/`
   over it, whole file, no merge.

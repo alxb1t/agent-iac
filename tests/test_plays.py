@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import jinja2
 import pytest
 import yaml
 
@@ -91,6 +92,72 @@ def test_restore_replaces_the_kb_only_with_kb():
     assert names(steps).index(RESTORE_BLOCK) < steps.index(clone)
 
 
+def restore_when(name, values):
+    """Evaluate a restore task's `when` over values and the play's box_migrates, as Ansible would; unset names chain."""
+    env = jinja2.Environment(undefined=jinja2.ChainableUndefined)
+    migrates = plays("playbooks/restore.yml")[-1]["vars"].get("box_migrates", "")
+    scope = {**values, "box_migrates": env.from_string(migrates).render(values) == "True"}
+    return bool(env.compile_expression(task("playbooks/restore.yml", name)["when"])(**scope))
+
+
+MIGRATE_ZIP = {"box": {"name": "example"}, "box_archive_file": "/x/migrate.zip", "box_volume": {"stdout": "/v"}}
+OWN_ARCHIVE = {**MIGRATE_ZIP, "box_archive_file": "/x/example-20261001T040000Z.zip.age"}
+
+
+# An imported .env would shadow the sops secrets; a box's own .env holds keys `hermes auth add` wrote, and a box's own
+# archive is a .zip.age, so only a plain .zip drops it. Why: 0005-the-migration design D2; security S1.
+def test_restore_drops_the_env_of_a_plain_local_zip_only():
+    rm = task("playbooks/restore.yml", "Remove the old install's env")
+    assert argv(rm) == ["podman", "unshare", "rm", "-f", "{{ box_volume.stdout }}/.env"]
+    assert restore_when(rm["name"], MIGRATE_ZIP)
+    assert not restore_when(rm["name"], OWN_ARCHIVE)
+    from_the_bucket = {k: v for k, v in MIGRATE_ZIP.items() if k != "box_archive_file"}
+    assert not restore_when(rm["name"], from_the_bucket)
+    read = "Read the volume's path"
+    assert restore_when(read, MIGRATE_ZIP) and restore_when(read, {"box": {"name": "example", "kb": {}}})
+    assert not restore_when(read, OWN_ARCHIVE) and not restore_when(read, from_the_bucket)
+
+
+# An import that writes .env and then fails must not start the agent on it; a run that stops before the service does
+# leaves the volume alone. Why: 0005-the-migration design D2; review R2, security S2.
+def test_a_failed_local_import_still_drops_the_env_before_the_start():
+    block = task("playbooks/restore.yml", RESTORE_BLOCK)
+    steps, after = names(block["block"]), names(block["always"])
+    assert steps.index("Stop the box") < steps.index("Read the volume's path") < steps.index("Import the archive")
+    assert after.index("Remove the old install's env") < after.index("Start the box")
+    failed_import = {**MIGRATE_ZIP, "box_import": {"failed": True}}
+    assert restore_when("Remove the old install's env", failed_import)
+    before_the_stop = {k: v for k, v in MIGRATE_ZIP.items() if k != "box_volume"}
+    assert not restore_when("Remove the old install's env", before_the_stop)
+    # A failed read leaves no path, and `rm -f /.env` would fail the always and skip the start.
+    assert not restore_when("Remove the old install's env", {**MIGRATE_ZIP, "box_volume": {"stdout": "", "rc": 125}})
+
+
+EXAMPLE = ROOT / "examples" / "box"
+
+
+# `make restore -e …` hands -e to make, not Ansible; abspath makes a relative ZIP safe: 0005-the-migration design D3.
+def test_make_migrate_restores_the_zip_by_its_absolute_path():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate", "ZIP=migrate.zip"], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert f"-e box_archive_file={EXAMPLE / 'migrate.zip'}" in done.stdout
+    assert "alxb1t.agent_iac.restore" in done.stdout
+
+
+# make splits a path on its spaces, so `my migrate.zip` would reach the fetch as `<dir>/my`: review R4.
+def test_make_migrate_refuses_a_zip_path_with_a_space():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate", "ZIP=my migrate.zip"], capture_output=True, text=True)
+    assert done.returncode != 0
+    assert "ZIP=my migrate.zip has a space; rename the file or its folder" in done.stderr
+    assert "ansible-playbook" not in done.stdout
+
+
+def test_make_migrate_without_a_zip_says_how():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate"], capture_output=True, text=True)
+    assert done.returncode != 0
+    assert "usage: make migrate ZIP=<path to the zip>" in done.stderr
+
+
 FETCH = "roles/box/tasks/fetch.yml"
 
 
@@ -153,7 +220,7 @@ def short_tmp():
     shutil.rmtree(path)
 
 
-def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True):
+def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True, extra_vars=None):
     """Run fetch.yml on this machine against the stubs; return ansible-playbook's exit code, its output, the calls."""
     bin_dir, home, log = tmp_path / "bin", tmp_path / "home", tmp_path / "log"
     for d in (bin_dir, home):
@@ -162,7 +229,7 @@ def run_fetch(sample_vars, tmp_path, short_tmp, listing=ARCHIVES, identity=True)
         (bin_dir / name).write_text(f"#!/bin/sh\n{body}\n")
         (bin_dir / name).chmod(0o755)
     log.write_text("")
-    (tmp_path / "vars.json").write_text(json.dumps(sample_vars))
+    (tmp_path / "vars.json").write_text(json.dumps({**sample_vars, **(extra_vars or {})}))
     play = [{"hosts": "localhost", "gather_facts": False, "tasks": [{"ansible.builtin.import_tasks": str(ROOT / FETCH)}]}]
     (tmp_path / "fetch.yml").write_text(yaml.safe_dump(play))
     env = {k: v for k, v in os.environ.items() if k != "SOPS_AGE_KEY_FILE"}
@@ -200,6 +267,51 @@ def test_fetch_refuses_an_archive_dated_in_the_future(sample_vars, tmp_path, sho
     assert code != 0
     assert "example-99991231T000000Z.zip.age is dated in the future" in out
     assert [line for line in log if not line.startswith("rclone lsf ")] == []
+
+
+# A hand-installed Hermes's zip is copied as is: no bucket, no identity, and the file stays where it was.
+def test_fetch_copies_a_local_zip_and_leaves_it(sample_vars, tmp_path, short_tmp):
+    zip_file = tmp_path / "migrate.zip"
+    zip_file.write_bytes(b"example zip")
+    extra = {"box_archive_file": str(zip_file)}
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, identity=False, extra_vars=extra)
+    assert code == 0, out
+    assert "archive: migrate.zip" in out
+    assert log == []
+    assert zip_file.read_bytes() == b"example zip"
+    [folder] = short_tmp.glob("agent-iac-restore-*")
+    assert (folder / "restore.zip").read_bytes() == b"example zip"
+
+
+def test_fetch_decrypts_a_local_age_archive_without_the_bucket(sample_vars, tmp_path, short_tmp):
+    archive = tmp_path / "migrate.zip.age"
+    archive.write_bytes(b"example archive")
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, extra_vars={"box_archive_file": str(archive)})
+    assert code == 0, out
+    [age] = log
+    assert age.startswith("age -d ") and age.endswith(f" {archive}")
+    assert archive.exists()
+
+
+# Each refusal names its problem and stops before the private folder is made.
+@pytest.mark.parametrize(
+    ("extra", "problem"),
+    [
+        ({"box_archive_file": "{tmp}/migrate.tar"}, "is not a .zip or a .zip.age"),
+        ({"box_archive_file": "migrate.zip"}, "is not an absolute path"),
+        ({"box_archive_file": "{tmp}/missing.zip"}, "is not a file"),
+        ({"box_archive_file": "{tmp}/migrate.zip", "box_archive": ARCHIVES[0]}, "not both"),
+    ],
+)
+def test_fetch_refuses_a_bad_local_archive(sample_vars, tmp_path, short_tmp, extra, problem):
+    for name in ("migrate.tar", "migrate.zip"):
+        (tmp_path / name).write_bytes(b"example")
+    extra = {k: v.format(tmp=tmp_path) for k, v in extra.items()}
+    code, out, log = run_fetch(sample_vars, tmp_path, short_tmp, extra_vars=extra)
+    assert code != 0
+    assert problem in out
+    assert "TASK [Make the private folder]" not in out
+    assert log == []
 
 
 # The files the v0.3 backup wrote for its SFTP host: 0002-the-box design D11 and D12; 0004-the-handover review R10.

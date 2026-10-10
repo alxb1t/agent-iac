@@ -18,7 +18,8 @@
         tasks_from: user_env.yml
 
 # The box holds public keys only, so the archive is decrypted here: 0004-the-handover design D7.
-# The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age.
+# The newest archive by default; pick one with -e box_archive=<name>-<timestamp>.zip.age, or take a local one with
+# -e box_archive_file=<absolute path>.
 - name: Fetch and decrypt the archive
   hosts: localhost
   gather_facts: false
@@ -33,6 +34,8 @@
 
 # A stopped service holds no database; the start and the clean-up run on every exit.
 # Why: 0004-the-handover design D8.
+# Only a plain .zip is a hand-installed Hermes's; a .zip.age is a box's own, and its .env holds keys
+# `hermes auth add` wrote. Why: 0005-the-migration design D2.
 - name: Restore the box
   hosts: box
   gather_facts: false
@@ -42,6 +45,7 @@
     box_local: "{{ hostvars.localhost.box_tmp.path }}"
     box_zip: "{{ box_config }}/{{ box.name }}/restore.zip"
     box_in_container: /tmp/agent-iac-restore.zip
+    box_migrates: "{{ box_archive_file is defined and box_archive_file.endswith('.zip') }}"
   tasks:
     - name: Restore with the service stopped
       become: true
@@ -59,6 +63,13 @@
             state: stopped
             scope: user
 
+        - name: Read the volume's path
+          ansible.builtin.command: >-
+            podman volume inspect --format {% raw %}'{{ .Mountpoint }}'{% endraw %} {{ box.name }}-data
+          register: box_volume
+          changed_when: false
+          when: box.kb is defined or box_migrates
+
         - name: Import the archive
           ansible.builtin.command:
             cmd: >-
@@ -68,13 +79,6 @@
               {{ manifest.restore[1:] | map('replace', '{archive}', box_in_container) | map('quote') | join(' ') }}
           changed_when: true
 
-        - name: Read the volume's path
-          ansible.builtin.command: >-
-            podman volume inspect --format {% raw %}'{{ .Mountpoint }}'{% endraw %} {{ box.name }}-data
-          register: box_volume
-          changed_when: false
-          when: box.kb is defined
-
         # The archive's kb/ has no .git, and the clone runs only into an empty folder.
         - name: Remove the archive's KB
           ansible.builtin.command:
@@ -82,6 +86,15 @@
           changed_when: true
           when: box.kb is defined
       always:
+        # The old install's .env would shadow the sops secrets; Hermes seeds a template at the next start. In always,
+        # so a failed import does not start the agent on it; a run that failed before the stop has no volume path.
+        # Why: 0005-the-migration design D2.
+        - name: Remove the old install's env
+          ansible.builtin.command:
+            argv: [podman, unshare, rm, -f, "{{ box_volume.stdout }}/.env"]
+          changed_when: true
+          when: box_migrates and box_volume.stdout | default('') | length > 0
+
         - name: Start the box
           ansible.builtin.systemd_service:
             name: "{{ box.name }}"
