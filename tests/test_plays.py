@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import jinja2
 import pytest
 import yaml
 
@@ -91,16 +92,45 @@ def test_restore_replaces_the_kb_only_with_kb():
     assert names(steps).index(RESTORE_BLOCK) < steps.index(clone)
 
 
-# An imported .env would shadow the sops secrets; a box's own .env holds keys `hermes auth add` wrote.
-# Why: 0005-the-migration design D2.
-def test_restore_drops_the_env_of_a_local_import_only():
-    steps = names(task("playbooks/restore.yml", RESTORE_BLOCK)["block"])
+def restore_when(name, values):
+    """Evaluate a restore task's `when` over values and the play's box_migrates, as Ansible would; unset names chain."""
+    env = jinja2.Environment(undefined=jinja2.ChainableUndefined)
+    migrates = plays("playbooks/restore.yml")[-1]["vars"].get("box_migrates", "")
+    scope = {**values, "box_migrates": env.from_string(migrates).render(values) == "True"}
+    return bool(env.compile_expression(task("playbooks/restore.yml", name)["when"])(**scope))
+
+
+MIGRATE_ZIP = {"box": {"name": "example"}, "box_archive_file": "/x/migrate.zip", "box_volume": {"stdout": "/v"}}
+OWN_ARCHIVE = {**MIGRATE_ZIP, "box_archive_file": "/x/example-20261001T040000Z.zip.age"}
+
+
+# An imported .env would shadow the sops secrets; a box's own .env holds keys `hermes auth add` wrote, and a box's own
+# archive is a .zip.age, so only a plain .zip drops it. Why: 0005-the-migration design D2; security S1.
+def test_restore_drops_the_env_of_a_plain_local_zip_only():
     rm = task("playbooks/restore.yml", "Remove the old install's env")
-    read = task("playbooks/restore.yml", "Read the volume's path")
-    assert rm["when"] == "box_archive_file is defined"
     assert argv(rm) == ["podman", "unshare", "rm", "-f", "{{ box_volume.stdout }}/.env"]
-    assert steps.index("Import the archive") < steps.index("Read the volume's path") < steps.index(rm["name"])
-    assert read["when"] == "box.kb is defined or box_archive_file is defined"
+    assert restore_when(rm["name"], MIGRATE_ZIP)
+    assert not restore_when(rm["name"], OWN_ARCHIVE)
+    from_the_bucket = {k: v for k, v in MIGRATE_ZIP.items() if k != "box_archive_file"}
+    assert not restore_when(rm["name"], from_the_bucket)
+    read = "Read the volume's path"
+    assert restore_when(read, MIGRATE_ZIP) and restore_when(read, {"box": {"name": "example", "kb": {}}})
+    assert not restore_when(read, OWN_ARCHIVE) and not restore_when(read, from_the_bucket)
+
+
+# An import that writes .env and then fails must not start the agent on it; a run that stops before the service does
+# leaves the volume alone. Why: 0005-the-migration design D2; review R2, security S2.
+def test_a_failed_local_import_still_drops_the_env_before_the_start():
+    block = task("playbooks/restore.yml", RESTORE_BLOCK)
+    steps, after = names(block["block"]), names(block["always"])
+    assert steps.index("Stop the box") < steps.index("Read the volume's path") < steps.index("Import the archive")
+    assert after.index("Remove the old install's env") < after.index("Start the box")
+    failed_import = {**MIGRATE_ZIP, "box_import": {"failed": True}}
+    assert restore_when("Remove the old install's env", failed_import)
+    before_the_stop = {k: v for k, v in MIGRATE_ZIP.items() if k != "box_volume"}
+    assert not restore_when("Remove the old install's env", before_the_stop)
+    # A failed read leaves no path, and `rm -f /.env` would fail the always and skip the start.
+    assert not restore_when("Remove the old install's env", {**MIGRATE_ZIP, "box_volume": {"stdout": "", "rc": 125}})
 
 
 EXAMPLE = ROOT / "examples" / "box"
@@ -112,6 +142,14 @@ def test_make_migrate_restores_the_zip_by_its_absolute_path():
     assert done.returncode == 0, done.stderr
     assert f"-e box_archive_file={EXAMPLE / 'migrate.zip'}" in done.stdout
     assert "alxb1t.agent_iac.restore" in done.stdout
+
+
+# make splits a path on its spaces, so `my migrate.zip` would reach the fetch as `<dir>/my`: review R4.
+def test_make_migrate_refuses_a_zip_path_with_a_space():
+    done = subprocess.run(["make", "-n", "-C", EXAMPLE, "migrate", "ZIP=my migrate.zip"], capture_output=True, text=True)
+    assert done.returncode != 0
+    assert "ZIP=my migrate.zip has a space; rename the file or its folder" in done.stderr
+    assert "ansible-playbook" not in done.stdout
 
 
 def test_make_migrate_without_a_zip_says_how():

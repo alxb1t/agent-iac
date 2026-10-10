@@ -30,8 +30,10 @@ ansible-playbook alxb1t.agent_iac.restore -e box_file=$PWD/box.yaml -e box_archi
 future: no nightly run wrote it, so the box that uploaded it was compromised. Rotate the R2 token, then name an
 archive from before the compromise, as above.
 
-An archive already on your machine, `.zip` or `.zip.age`, restores with `make migrate ZIP=<path>`: a hand-installed
-Hermes's `hermes backup` zip, per section 7 of the [host checklist](../../docs/host.md).
+An archive already on your machine, `.zip` or `.zip.age`, restores with `make migrate ZIP=<path>`, a path with no
+space in it. A `.zip.age`, e.g. one downloaded from the bucket, keeps its `.env`. A `.zip` is a hand-installed Hermes's
+`hermes backup` zip, per section 7 of the [host checklist](../../docs/host.md): its `.env` is removed, so the secrets
+come from sops.
 
 ## By hand: the dashboard, `age` and `hermes`
 

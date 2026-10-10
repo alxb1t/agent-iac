@@ -126,8 +126,9 @@ This section decides how a secret reaches the box, and how a backup is proven.
 - A restore is one step, from the operator's or the client's machine: fetch, decrypt there, stop, import with the
   manifest's `restore`, start. By hand, it is `age -d` and `hermes import`: the example's
   [RESTORE.md](../examples/box/RESTORE.md). A local archive, `.zip` or `.zip.age`, takes the same path with
-  `make migrate ZIP=<path>`, and its `.env` is removed after the import, so the secrets come from sops: that is how a
-  hand-installed Hermes moves into a box, per section 7 of the [host checklist](host.md).
+  `make migrate ZIP=<path>`. A `.zip`'s `.env` is removed after the import, so the secrets come from sops: that is how
+  a hand-installed Hermes moves into a box, per section 7 of the [host checklist](host.md). A `.zip.age` is a box's
+  own, and keeps its `.env`.
 - A **restore drill** imports the newest archive into a scratch volume and checks its database. It needs a box and
   a bucket, so it gates the acceptance by hand, not a release: v0.4.0 rewrote the backup and shipped without one.
 

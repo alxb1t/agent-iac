@@ -8,8 +8,9 @@ agent to resume with its previous state. The decrypted archive SHALL be removed 
 SHALL print the archive's name before the download, and SHALL stop when the newest archive is dated after the time
 of the machine running it, unless the archive is named. Given `box_archive_file`, an absolute path on the machine
 running it, `restore` SHALL take that file instead of the bucket: a `.zip.age` decrypted, a `.zip` copied as is,
-anything else refused; the file itself SHALL NOT be moved or deleted; and after the import it SHALL remove `.env`
-from the blueprint mount.
+anything else refused; the file itself SHALL NOT be moved or deleted. For a `.zip`, it SHALL remove `.env` from the
+blueprint mount after the import, and before the service starts even when the import fails; a `.zip.age`, a box's own
+archive, SHALL keep its `.env`.
 
 #### Scenario: A fresh box resumes after restore
 - **WHEN** `apply` has run on a fresh host and `restore` is run against the same bucket
@@ -35,6 +36,14 @@ from the blueprint mount.
 - **WHEN** `restore` runs with `box_archive_file` naming a `hermes backup` zip from a hand-installed Hermes
 - **THEN** the agent starts with that Hermes's sessions and memories, `/opt/data/.env` holds none of its values, and
   the zip is still where it was
+
+#### Scenario: A failed migration does not start on the old secrets
+- **WHEN** `restore` runs with `box_archive_file` naming a `.zip` and the import fails after writing `.env`
+- **THEN** the run fails, and the agent starts without that `.env`
+
+#### Scenario: A box's own archive keeps its keys
+- **WHEN** `restore` runs with `box_archive_file` naming a `<name>-<timestamp>.zip.age` downloaded from the bucket
+- **THEN** `/opt/data/.env` is the archive's, with the keys `hermes auth add` wrote
 
 #### Scenario: A local archive needs no bucket
 - **WHEN** `restore` runs with `box_archive_file` naming a `.zip`

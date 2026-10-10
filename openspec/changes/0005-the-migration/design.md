@@ -1,6 +1,6 @@
 # 0005-the-migration — design
 
-How `restore` takes a local archive through the path it already has, and drops the old install's `.env`. Verdict:
+How `restore` takes a local archive through the path it already has, and drops a hand-installed Hermes's `.env`. Verdict:
 build it phase by phase, as [tasks](tasks.md) orders; nothing by hand.
 
 ## Context
@@ -45,17 +45,17 @@ fetch.yml
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D2 | in `playbooks/restore.yml`, after *Import the archive*: *Read the volume's path* runs when `box.kb is defined or box_archive_file is defined`, and a new *Remove the old install's env* runs `podman unshare rm -f <volume>/.env` when `box_archive_file is defined`; Hermes seeds a template at the next start; `auth.json` stays | an imported `.env` would shadow the sops secrets and leave the old ones on the volume; provider logins migrate | removing `.env` on every restore (a box's own `.env` holds keys `hermes auth add` wrote) |
+| D2 | in `playbooks/restore.yml`, the play's `box_migrates` is true when `box_archive_file` names a plain `.zip`; *Read the volume's path* moves before *Import the archive* and runs when `box.kb is defined or box_migrates`; a new *Remove the old install's env*, first in the block's `always:` before *Start the box*, runs `podman unshare rm -f <volume>/.env` when `box_migrates` and the volume's path was read; Hermes seeds a template at the next start; `auth.json` stays | an imported `.env` would shadow the sops secrets and leave the old ones on the volume; in `always:`, an import that wrote `.env` and then failed does not start the agent on it, and a run that failed before the stop has no path, so leaves the volume alone; provider logins migrate | removing `.env` on every restore, or on a local `.zip.age` (a box's own archive, whose `.env` holds keys `hermes auth add` wrote); the removal after the import in `block:` (a failed import starts on the old `.env`) |
 
 ### D3 — `make migrate`
 
 ```makefile
-migrate:        ; $(if $(ZIP),,$(error usage: make migrate ZIP=<path to the zip>)) ansible-playbook alxb1t.agent_iac.restore -e box_file=$(CURDIR)/box.yaml -e box_archive_file=$(abspath $(ZIP))
+migrate:        ; $(if $(ZIP),,$(error usage: make migrate ZIP=<path to the zip>))$(if $(word 2,$(ZIP)),$(error ZIP=$(ZIP) has a space; rename the file or its folder)) ansible-playbook alxb1t.agent_iac.restore -e box_file=$(CURDIR)/box.yaml -e box_archive_file=$(abspath $(ZIP))
 ```
 
 | id | decision | because | rejected |
 |---|---|---|---|
-| D3 | `examples/box/Makefile` gains the line above | `make restore -e …` hands `-e` to make, not Ansible; `abspath` makes a relative `ZIP` safe | the raw `ansible-playbook` line in the docs only |
+| D3 | `examples/box/Makefile` gains the line above | `make restore -e …` hands `-e` to make, not Ansible; `abspath` makes a relative `ZIP` safe; make splits a value on its spaces, so a `ZIP` with one is refused by name | the raw `ansible-playbook` line in the docs only; quoting the value (`abspath` has already split it) |
 
 ### D4 — The docs
 
@@ -73,7 +73,7 @@ migrate:        ; $(if $(ZIP),,$(error usage: make migrate ZIP=<path to the zip>
 
 | file | what it asserts |
 |---|---|
-| `tests/test_plays.py` | `run_fetch` takes extra vars; a local `.zip`: no `rclone` and no `age` call, no identity needed, `restore.zip` equals the file, the file still exists; a local `.zip.age`: `age -d` on the file, no `rclone`; `migrate.tar`, a relative path and `box_archive` with `box_archive_file` each refused before the private folder; *Remove the old install's env* runs `rm -f` on `.env` under `box_archive_file is defined` only, after *Import the archive*; `examples/box/Makefile`'s `migrate` passes `box_archive_file=$(abspath $(ZIP))` |
+| `tests/test_plays.py` | `run_fetch` takes extra vars; a local `.zip`: no `rclone` and no `age` call, no identity needed, `restore.zip` equals the file, the file still exists; a local `.zip.age`: `age -d` on the file, no `rclone`; `migrate.tar`, a relative path and `box_archive` with `box_archive_file` each refused before the private folder; *Remove the old install's env* runs `rm -f` on `.env` for a local `.zip` only, not a `.zip.age` nor the bucket, in `always:` before *Start the box*, and not when the volume's path was never read, which now comes before *Import the archive*; `examples/box/Makefile`'s `migrate` passes `box_archive_file=$(abspath $(ZIP))` and refuses a `ZIP` with a space |
 
 ## Dependencies
 

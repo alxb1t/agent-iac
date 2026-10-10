@@ -21,8 +21,8 @@ path is the smallest way in.
 - **`restore` takes `-e box_archive_file=<absolute path>`**: a `.zip.age` is decrypted with the same identity, a
   `.zip` copied as is, both into the private temp folder; the user's file is never moved or deleted, per
   [D1](design.md#d1).
-- **A local import drops `.env`** from the volume after the import, so the old install's secrets neither shadow the
-  sops ones nor stay on the box, per [D2](design.md#d2).
+- **A local `.zip`'s import drops `.env`** from the volume, even when the import fails, so the old install's secrets
+  neither shadow the sops ones nor stay on the box; a local `.zip.age`, a box's own, keeps it, per [D2](design.md#d2).
 - **The example gains `make migrate ZIP=<path>`**, per [D3](design.md#d3).
 - **`docs/host.md` gains *Migrating a hand-installed Hermes***; `RESTORE.md`, `README.md` and `docs/architecture.md`
   name the local archive, per [D4](design.md#d4).
@@ -36,12 +36,12 @@ None.
 
 ### Modified Capabilities
 
-- `box-backup`: `restore` also imports a local archive, and drops its `.env`.
+- `box-backup`: `restore` also imports a local archive, and drops a `.zip`'s `.env`.
 
 Each requirement the delta touches:
 
 - `box-backup` · *Restore is one step* → modified: a local archive by `box_archive_file`, never moved or deleted;
-  `.env` removed after a local import.
+  `.env` removed after a local `.zip`'s import, before the start even when it fails; a `.zip.age` keeps it.
 
 ## Impact
 
