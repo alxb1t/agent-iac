@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
+
 ### Added
 
 - `docs/host.md` opens with the onboarding: the client's R2 bucket, its four-day lock rule and a bucket-scoped token; the client's age key beside the operator's; a `tag:box` auth key and a tailnet policy under which the box reaches nothing; then the node's share and a terminal provider login. `examples/box/RESTORE.md` shows the client `make restore` and the restore by hand with `age -d` and `hermes import`.
